@@ -38,8 +38,9 @@ pipeline {
 
         stage('NuGet Sources') {
             steps {
-                bat '''
-                    dotnet nuget list source
+  		bat '''
+                    type "%WORKSPACE%\\NuGet.Config"
+                    dotnet nuget list source --configfile "%WORKSPACE%\\NuGet.Config"
                     if not exist "C:\\data\\nuget\\rockwell" exit /b 1
                     dir "C:\\data\\nuget\\rockwell\\*.nupkg"
                 '''
@@ -49,7 +50,7 @@ pipeline {
         stage('Restore') {
             steps {
                 dir("${env.SOLUTION_DIR}") {
-                    bat 'dotnet restore "%SOLUTION_FILE%" --force'
+                    bat 'dotnet restore "%SOLUTION_FILE%" --force --configfile "%WORKSPACE%\\NuGet.Config"'
                 }
             }
         }
