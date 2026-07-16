@@ -1,0 +1,89 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        SOLUTION_DIR = '2-cicd-config\\1-ci-teststage\\2-ci-unittestscript'
+        SOLUTION_FILE = 'LogixUnitTesting.sln'
+    }
+
+    stages {
+        stage('Environment') {
+            steps {
+                bat '''
+                    echo Workspace: %WORKSPACE%
+                    whoami
+                    where git
+                    git --version
+                    where dotnet
+                    dotnet --info
+                    dotnet --list-sdks
+                '''
+            }
+        }
+
+        stage('Repository Status') {
+            steps {
+                bat '''
+                    git status
+                    git branch --show-current
+                    git log -1 --oneline
+                '''
+            }
+        }
+
+        stage('NuGet Sources') {
+            steps {
+                bat '''
+                    dotnet nuget list source
+                    if not exist "C:\\data\\nuget\\rockwell" exit /b 1
+                    dir "C:\\data\\nuget\\rockwell\\*.nupkg"
+                '''
+            }
+        }
+
+        stage('Restore') {
+            steps {
+                dir("${env.SOLUTION_DIR}") {
+                    bat 'dotnet restore "%SOLUTION_FILE%" --force'
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir("${env.SOLUTION_DIR}") {
+                    bat 'dotnet build "%SOLUTION_FILE%" -c Release --no-restore'
+                }
+            }
+        }
+
+        stage('Verify Output') {
+            steps {
+                bat '''
+                    if not exist "%SOLUTION_DIR%\\UnitTesting_ConsoleApp\\bin\\Release\\net10.0-windows7.0\\UnitTesting_ConsoleApp.dll" exit /b 1
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: '2-cicd-config/1-ci-teststage/2-ci-unittestscript/**/bin/Release/**/*',
+                             allowEmptyArchive: true,
+                             fingerprint: true
+        }
+
+        success {
+            echo 'Jenkins smoke pipeline completed successfully.'
+        }
+
+        failure {
+            echo 'Jenkins smoke pipeline failed. Review the first failing stage.'
+        }
+    }
+}
