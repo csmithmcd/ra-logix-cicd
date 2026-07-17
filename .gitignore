@@ -1,0 +1,9 @@
+# Repository-owned Python environment and generated smoke artifacts
+.venv/
+python/artifacts/
+
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/

@@ -6,9 +6,19 @@ pipeline {
         disableConcurrentBuilds()
     }
 
+    parameters {
+        booleanParam(
+            name: 'RUN_PYTHON_ECHO_SMOKE',
+            defaultValue: false,
+            description: 'Run the read-only FactoryTalk Logix Echo Python connectivity smoke test.'
+        )
+    }
+
     environment {
         SOLUTION_DIR = '2-cicd-config\\1-ci-teststage\\2-ci-unittestscript'
         SOLUTION_FILE = 'LogixUnitTesting.sln'
+        PYTHON_EXE = 'C:\\Program Files\\Python312\\python.exe'
+        ECHO_SDK_WHEEL = 'C:\\Users\\Public\\Documents\\FactoryTalk Logix Echo\\SDK\\Python\\ftecho_sdk-4.0.0-py3-none-any.whl'
     }
 
     stages {
@@ -70,11 +80,36 @@ pipeline {
                 '''
             }
         }
+
+        stage('Python Echo Setup') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            when {
+                expression { params.RUN_PYTHON_ECHO_SMOKE }
+            }
+            steps {
+                bat '''
+                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%WORKSPACE%\\python\\scripts\\setup_venv.ps1" -PythonExecutable "%PYTHON_EXE%" -EchoSdkWheel "%ECHO_SDK_WHEEL%" -VenvPath "%WORKSPACE%\\.venv"
+                '''
+            }
+        }
+
+        stage('Python Echo Read-Only Smoke') {
+            when {
+                expression { params.RUN_PYTHON_ECHO_SMOKE }
+            }
+            steps {
+                bat '''
+                    "%WORKSPACE%\\.venv\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\echo_connectivity.py" --output "%WORKSPACE%\\python\\artifacts\\echo-connectivity.json" --timeout-seconds 30
+                '''
+            }
+        }
     }
 
     post {
         always {
-            archiveArtifacts artifacts: '2-cicd-config/1-ci-teststage/2-ci-unittestscript/**/bin/Release/**/*',
+            archiveArtifacts artifacts: '2-cicd-config/1-ci-teststage/2-ci-unittestscript/**/bin/Release/**/*,python/artifacts/*.json',
                              allowEmptyArchive: true,
                              fingerprint: true
         }

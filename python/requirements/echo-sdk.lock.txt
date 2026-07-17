@@ -1,0 +1,8 @@
+# Direct requirements come from ftecho_sdk 4.0.0 metadata.
+# Transitive requirements are pinned so repeated setup runs resolve the same environment.
+cffi==1.17.1
+clr-loader==0.2.7.post0
+pycparser==2.22
+pythonnet==3.0.5
+typeguard==4.4.4
+typing-extensions==4.15.0

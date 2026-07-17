@@ -1,0 +1,8 @@
+"""Process exit codes shared by Rockwell Python tools."""
+
+SUCCESS = 0
+TEST_FAILURE = 1
+CONFIGURATION_ERROR = 2
+DEPENDENCY_ERROR = 3
+SERVICE_UNAVAILABLE = 4
+CLEANUP_FAILURE = 5
