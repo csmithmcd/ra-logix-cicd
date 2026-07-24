@@ -313,7 +313,7 @@ def main() -> int:
             "type": "UnsupportedPythonVersion",
             "message": (
                 "logix-designer-sdk 2.0.2 requires Python 3.12 or 3.13; "
-                "Python 3.12 is recommended."
+                "Python 3.13 is the validated baseline."
             ),
         }
         return finish(result, args.output, exit_codes.CONFIGURATION_ERROR, started)

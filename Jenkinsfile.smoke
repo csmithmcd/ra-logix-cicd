@@ -15,7 +15,12 @@ pipeline {
         booleanParam(
             name: 'RUN_PYTHON_LOGIX_DESIGNER_SMOKE',
             defaultValue: false,
-            description: 'Diagnostic open/close probe. Keep disabled until the official SDK sample succeeds interactively.'
+            description: 'Run the read-only Logix Designer Python open/close probe. Disabled by default.'
+        )
+        string(
+            name: 'LOGIX_DESIGNER_PYTHON_EXE',
+            defaultValue: 'C:\\Program Files\\Python313\\python.exe',
+            description: 'Python 3.13 x64 executable used only when the Logix Designer smoke is enabled.'
         )
     }
 
@@ -25,7 +30,7 @@ pipeline {
         PYTHON_EXE = 'C:\\Program Files\\Python312\\python.exe'
         ECHO_SDK_WHEEL = 'C:\\Users\\Public\\Documents\\FactoryTalk Logix Echo\\SDK\\Python\\ftecho_sdk-4.0.0-py3-none-any.whl'
         LOGIX_DESIGNER_SDK_WHEEL = 'C:\\Users\\Public\\Documents\\Studio 5000\\Logix Designer SDK\\python\\logix_designer_sdk-2.0.2-py3-none-any.whl'
-        LOGIX_DESIGNER_PROJECT = '1-production-files\\L5Xs\\ExampleForCICD_L85E.L5X'
+        LOGIX_DESIGNER_PROJECT = '1-production-files\\ACDs\\ExampleForCICD_L85E.ACD'
     }
 
     stages {
@@ -122,21 +127,21 @@ pipeline {
             }
             steps {
                 bat '''
-                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%WORKSPACE%\\python\\scripts\\setup_logix_designer_venv.ps1" -PythonExecutable "%PYTHON_EXE%" -LogixDesignerSdkWheel "%LOGIX_DESIGNER_SDK_WHEEL%" -VenvPath "%WORKSPACE%\\.venv-logix-designer"
+                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%WORKSPACE%\\python\\scripts\\setup_logix_designer_venv.ps1" -PythonExecutable "%LOGIX_DESIGNER_PYTHON_EXE%" -LogixDesignerSdkWheel "%LOGIX_DESIGNER_SDK_WHEEL%" -VenvPath "%WORKSPACE%\\.venv-logix-designer"
                 '''
             }
         }
 
         stage('Python Logix Designer Read-Only Smoke') {
             options {
-                timeout(time: 5, unit: 'MINUTES')
+                timeout(time: 12, unit: 'MINUTES')
             }
             when {
                 expression { params.RUN_PYTHON_LOGIX_DESIGNER_SMOKE }
             }
             steps {
                 bat '''
-                    "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-executables.json" --timeout-seconds 180
+                    "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-executables.json" --timeout-seconds 600
                 '''
             }
         }

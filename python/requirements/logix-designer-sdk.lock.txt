@@ -1,7 +1,8 @@
-# Pinned dependencies for logix-designer-sdk 2.0.2 on Python 3.12 x64.
+# Proven dependencies for logix-designer-sdk 2.0.2 on Python 3.13 x64.
+# Validated interactively against Studio 5000 Logix Designer 36.04 on 2026-07-23.
 # The Rockwell wheel itself is installed separately from the verified local path.
-cffi==1.17.1
-clr-loader==0.2.7.post0
-numpy==2.4.1
-pycparser==2.22
-pythonnet==3.0.5
+cffi==2.1.0
+clr_loader==0.3.1
+numpy==2.5.1
+pycparser==3.0
+pythonnet==3.1.0

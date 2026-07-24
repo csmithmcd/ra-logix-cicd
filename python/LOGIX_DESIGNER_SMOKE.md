@@ -1,81 +1,61 @@
-# Logix Designer Python open-project probe
+# Logix Designer Python read-only smoke
 
-The current milestone is to prove that `logix-designer-sdk` 2.0.2 can open a known-good ACD interactively. Executable enumeration and Jenkins execution remain gated until Rockwell's official `get_comm_path.py` example succeeds.
+This milestone proves that the Logix Designer Python SDK can safely open and close a disposable ACD copy. Executable enumeration, Jenkins execution, and all controller-facing operations remain separately gated.
 
-## Current failure boundary
+## Proven interactive baseline
 
-Python 3.12 imports the SDK successfully, but both the custom probe and Rockwell's official example stall inside:
+Validated on `NIA-AUTO-ECH-01` with Studio 5000 Logix Designer 36.04:
 
-```python
-await LogixProject.open_logix_project(...)
-```
+- Python 3.13.14 x64
+- `logix-designer-sdk` 2.0.2
+- `cffi` 2.1.0, `clr_loader` 0.3.1, `numpy` 2.5.1, `pycparser` 3.0, `pythonnet` 3.1.0
+- Logix Designer SDK wheel SHA-256: `1025A3098D4688E335BC004324A320069BE9083A56C6924539146C7919891844`
 
-The failure occurs before `get_all_executables()`. Cancellation-related pythonnet errors after `Ctrl+C` are aftermath, not the root cause.
+On 2026-07-23, Rockwell's official `get_processor_type.py 36` returned the V36 processor catalog, including `1756-L85E`. The official `get_comm_path.py` then opened a disposable copy of `ExampleForCICD_L85E.ACD`, read `EmulateEthernet\127.0.0.1`, closed the project, and exited 0.
 
 ## Safety boundary
 
-The custom probe never passes the source project to the SDK. It:
+The repository probe never passes the source project to the SDK. It:
 
-1. Calculates the source SHA256.
+1. Calculates the source SHA-256.
 2. Creates and verifies a disposable copy with the same extension.
-3. Attempts only `LogixProject.open_logix_project()`.
-4. Calls `project.close()` if open returns.
-5. Confirms the source SHA256 did not change.
-6. Deletes the disposable copy.
+3. Opens and closes only that copy.
+4. Verifies the source SHA-256 is unchanged.
+5. Removes the disposable copy.
 
 It does not enumerate executables, save, build, download, upload, change communications paths, go online, or communicate with a controller.
 
-## Confirmed requirements
+## Repository venv setup
 
-- Package: `logix-designer-sdk` 2.0.2
-- Supported Python: 3.12 or 3.13
-- Recommended Python: 3.12 x64
-- Unsupported Python: 3.14
-- SDK wheel SHA256: `1025A3098D4688E335BC004324A320069BE9083A56C6924539146C7919891844`
-- Maximum probe timeout: 600 seconds
+The repository-owned Python 3.13 environment passed the open/close probe on 2026-07-24 at `C:\Projects\ra-logix-cicd\.venv-logix-designer-py313`. It does not modify the proven vendor examples venv.
 
-## Gate 1: official Rockwell example
-
-Run this interactively on the Rockwell VM against the known-good ACD:
+The current interactive base interpreter is installed per-user. Use it for the interactive repository validation:
 
 ```powershell
-$python = ".\.venv-logix-designer\Scripts\python.exe"
-$example = "C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python\Examples\get_comm_path.py"
-$acd = ".\1-production-files\ACDs\ExampleForCICD_L85E.ACD"
-
-& $python $example $acd
-$LASTEXITCODE
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File "C:\Projects\ra-logix-cicd\python\scripts\setup_logix_designer_venv.ps1" `
+  -PythonExecutable "C:\Users\csmith\AppData\Local\Programs\Python\Python313\python.exe" `
+  -LogixDesignerSdkWheel "C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python\logix_designer_sdk-2.0.2-py3-none-any.whl" `
+  -VenvPath "C:\Projects\ra-logix-cicd\.venv-logix-designer-py313"
 ```
 
-If this hangs or fails, stop. Do not run the Jenkins stage or executable enumeration.
+## Interactive repository probe
 
-## Gate 2: custom diagnostic probe
-
-Only after the official example succeeds, run:
+Run only after setup completes. The expected result is an exit code of `0`, `"status": "passed"`, and passed open, close, source-integrity, and cleanup checks. The executable-enumeration checks must remain `"not_run"`.
 
 ```powershell
-& ".\.venv-logix-designer\Scripts\python.exe" `
-  ".\python\smoke\logix_designer_executables.py" `
-  --project ".\1-production-files\ACDs\ExampleForCICD_L85E.ACD" `
-  --output ".\python\artifacts\logix-designer-executables.json" `
+& "C:\Projects\ra-logix-cicd\.venv-logix-designer-py313\Scripts\python.exe" `
+  "C:\Projects\ra-logix-cicd\python\smoke\logix_designer_executables.py" `
+  --project "C:\Projects\ra-logix-cicd\1-production-files\ACDs\ExampleForCICD_L85E.ACD" `
+  --output "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-open-project.json" `
   --timeout-seconds 600
 
 $LASTEXITCODE
-Get-Content ".\python\artifacts\logix-designer-executables.json"
+Get-Content "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-open-project.json"
 ```
-
-On timeout, the JSON identifies `open_logix_project` as the failing operation and captures:
-
-- Windows identity and session
-- `LdSdkServer` process state
-- TCP connections on port 53204
-- installed Studio 5000 / Logix Designer versions
-- source and disposable-copy paths
-
-The checks for `get_all_executables` remain `not_run` until the open-project gate is proven.
 
 ## Jenkins gate
 
-Keep `RUN_PYTHON_LOGIX_DESIGNER_SMOKE` disabled. It defaults to `false`. Do not enable it until both interactive gates succeed and the probe is deliberately advanced to the next milestone.
+`RUN_PYTHON_LOGIX_DESIGNER_SMOKE` remains `false` by default. Before enabling it, install Python 3.13.14 x64 for all users at `C:\Program Files\Python313\python.exe` (or provide an equivalent path through `LOGIX_DESIGNER_PYTHON_EXE`). Jenkins runs as `NT AUTHORITY\SYSTEM` and must not depend on the per-user interpreter above.
 
-No controller rollback is required because all current operations are read-only and use a disposable project copy.
+When deliberately enabled, Jenkins uses the Python 3.13 lock, a repository-owned venv, a disposable copy of the known-good ACD, a 600-second SDK timeout, and archives the JSON artifact. Do not enable executable enumeration until a separate review advances the read-only scope.

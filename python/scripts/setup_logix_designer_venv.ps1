@@ -13,7 +13,7 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $RequirementsFile = Join-Path $RepoRoot "python\requirements\logix-designer-sdk.lock.txt"
 
 if ([string]::IsNullOrWhiteSpace($PythonExecutable)) {
-    $PythonExecutable = "C:\Program Files\Python312\python.exe"
+    $PythonExecutable = "C:\Program Files\Python313\python.exe"
 }
 
 if ([string]::IsNullOrWhiteSpace($LogixDesignerSdkWheel)) {
@@ -40,7 +40,7 @@ function Invoke-Checked {
 
 try {
     if (-not (Test-Path -LiteralPath $PythonExecutable -PathType Leaf)) {
-        throw "Python 3.12 was not found at '$PythonExecutable'. Install Python 3.12 x64 for all users or pass -PythonExecutable."
+        throw "Python 3.13 was not found at '$PythonExecutable'. Install Python 3.13 x64 for all users or pass -PythonExecutable."
     }
 
     if (-not (Test-Path -LiteralPath $LogixDesignerSdkWheel -PathType Leaf)) {
@@ -55,9 +55,9 @@ try {
         -Executable $PythonExecutable `
         -Arguments @(
             "-c",
-            "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 12)"
+            "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 13)"
         ) `
-        -Description "Validating Python 3.12"
+        -Description "Validating Python 3.13"
 
     $actualWheelSha256 = (Get-FileHash -LiteralPath $LogixDesignerSdkWheel -Algorithm SHA256).Hash
     if ($actualWheelSha256 -ine $ExpectedWheelSha256) {
@@ -76,9 +76,9 @@ try {
         -Executable $VenvPython `
         -Arguments @(
             "-c",
-            "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 12)"
+            "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) else 13)"
         ) `
-        -Description "Validating virtual environment Python version"
+        -Description "Validating virtual environment Python 3.13"
 
     Invoke-Checked `
         -Executable $VenvPython `
