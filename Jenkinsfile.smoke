@@ -27,6 +27,11 @@ pipeline {
             defaultValue: false,
             description: 'Read executable metadata from a disposable ACD copy. Keep disabled until manually validated.'
         )
+        booleanParam(
+            name: 'RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY',
+            defaultValue: false,
+            description: 'Read project communications path and executable inventory from a disposable ACD copy. Keep disabled until manually validated.'
+        )
     }
 
     environment {
@@ -130,7 +135,8 @@ pipeline {
             when {
                 expression {
                     params.RUN_PYTHON_LOGIX_DESIGNER_SMOKE ||
-                    params.RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION
+                    params.RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION ||
+                    params.RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY
                 }
             }
             steps {
@@ -164,6 +170,20 @@ pipeline {
             steps {
                 bat '''
                     "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-executables.json" --timeout-seconds 600 --enumerate-executables
+                '''
+            }
+        }
+
+        stage('Python Logix Designer Project Inventory') {
+            options {
+                timeout(time: 12, unit: 'MINUTES')
+            }
+            when {
+                expression { params.RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY }
+            }
+            steps {
+                bat '''
+                    "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-project-inventory.json" --timeout-seconds 600 --project-inventory
                 '''
             }
         }

@@ -58,6 +58,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--project-inventory",
+        action="store_true",
+        help=(
+            "Read the communications path and executable inventory from the "
+            "disposable copy. Implies --enumerate-executables. Disabled by default."
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
@@ -122,6 +130,7 @@ def base_result() -> dict[str, Any]:
         "read_only": True,
         "working_copy_used": True,
         "executable_enumeration_enabled": False,
+        "project_inventory_enabled": False,
         "started_at_utc": datetime.now(timezone.utc).isoformat(),
         "host": platform.node(),
         "python_version": platform.python_version(),
@@ -131,6 +140,8 @@ def base_result() -> dict[str, Any]:
             "working_copy": "not_run",
             "project_open_started": "not_run",
             "project_open_completed": "not_run",
+            "get_communications_path_started": "not_run",
+            "get_communications_path_completed": "not_run",
             "get_all_executables_started": "not_run",
             "get_all_executables_completed": "not_run",
             "project_close_started": "not_run",
@@ -150,6 +161,7 @@ def operation_description(operation: str) -> str:
 
     labels = {
         "open_logix_project": "LogixProject.open_logix_project",
+        "get_communications_path": "LogixProject.get_communications_path",
         "get_all_executables": "LogixProject.get_all_executables",
         "close_project": "LogixProject.close",
     }
@@ -295,7 +307,8 @@ async def run_read_only_probe(
     checks: dict[str, str],
     operation_state: dict[str, str],
     enumerate_executables: bool,
-) -> list[dict[str, object]] | None:
+    project_inventory: bool,
+) -> dict[str, Any]:
     project = None
     operation_state["current_operation"] = "open_logix_project"
     checks["project_open_started"] = "passed"
@@ -308,6 +321,17 @@ async def run_read_only_probe(
         )
         checks["project_open_completed"] = "passed"
         operation_state["current_operation"] = "project_opened"
+        inventory: dict[str, Any] = {}
+        if project_inventory:
+            operation_state["current_operation"] = "get_communications_path"
+            checks["get_communications_path_started"] = "passed"
+            LOGGER.info(
+                "Reading disposable project communications path",
+                extra={"event": "get_communications_path_started"},
+            )
+            inventory["communications_path"] = await project.get_communications_path()
+            checks["get_communications_path_completed"] = "passed"
+            operation_state["current_operation"] = "project_opened"
         if enumerate_executables:
             operation_state["current_operation"] = "get_all_executables"
             checks["get_all_executables_started"] = "passed"
@@ -318,8 +342,8 @@ async def run_read_only_probe(
             executables = await project.get_all_executables()
             checks["get_all_executables_completed"] = "passed"
             operation_state["current_operation"] = "project_opened"
-            return summarize_executables(executables)
-        return None
+            inventory["executables"] = summarize_executables(executables)
+        return inventory
     finally:
         if project is not None:
             operation_state["current_operation"] = "close_project"
@@ -341,8 +365,12 @@ def main() -> int:
     configure_logging(args.verbose)
     started = time.monotonic()
     result = base_result()
-    result["executable_enumeration_enabled"] = args.enumerate_executables
-    if args.enumerate_executables:
+    enumerate_executables = args.enumerate_executables or args.project_inventory
+    result["executable_enumeration_enabled"] = enumerate_executables
+    result["project_inventory_enabled"] = args.project_inventory
+    if args.project_inventory:
+        result["smoke_test"] = "logix_designer_read_only_project_inventory"
+    elif args.enumerate_executables:
         result["smoke_test"] = "logix_designer_read_only_get_all_executables"
     checks: dict[str, str] = result["checks"]
     operation_state = {"current_operation": "input_validation"}
@@ -408,7 +436,7 @@ def main() -> int:
             raise OSError("The disposable project copy failed SHA256 verification")
         checks["working_copy"] = "passed"
 
-        executable_summaries = asyncio.run(
+        inventory = asyncio.run(
             asyncio.wait_for(
                 run_read_only_probe(
                     LogixProject,
@@ -416,14 +444,17 @@ def main() -> int:
                     project_copy,
                     checks,
                     operation_state,
-                    args.enumerate_executables,
+                    enumerate_executables,
+                    args.project_inventory,
                 ),
                 timeout=args.timeout_seconds,
             )
         )
-        if executable_summaries is not None:
-            result["executables"] = executable_summaries
-            result["executables_count"] = len(executable_summaries)
+        if "communications_path" in inventory:
+            result["communications_path"] = inventory["communications_path"]
+        if "executables" in inventory:
+            result["executables"] = inventory["executables"]
+            result["executables_count"] = len(inventory["executables"])
     except TimeoutError as error:
         LOGGER.exception(
             "Logix Designer SDK operation timed out", extra={"event": "sdk_timeout"}
@@ -431,6 +462,8 @@ def main() -> int:
         operation = operation_state["current_operation"]
         if operation == "open_logix_project":
             checks["project_open_completed"] = "failed"
+        elif operation == "get_communications_path":
+            checks["get_communications_path_completed"] = "failed"
         elif operation == "get_all_executables":
             checks["get_all_executables_completed"] = "failed"
         timeout_seconds = _normalise_seconds(args.timeout_seconds)
@@ -464,6 +497,8 @@ def main() -> int:
         operation = operation_state["current_operation"]
         if operation == "open_logix_project":
             checks["project_open_completed"] = "failed"
+        elif operation == "get_communications_path":
+            checks["get_communications_path_completed"] = "failed"
         elif operation == "get_all_executables":
             checks["get_all_executables_completed"] = "failed"
         result["error"] = {
@@ -494,6 +529,8 @@ def main() -> int:
         operation = operation_state["current_operation"]
         if operation == "open_logix_project":
             checks["project_open_completed"] = "failed"
+        elif operation == "get_communications_path":
+            checks["get_communications_path_completed"] = "failed"
         elif operation == "get_all_executables":
             checks["get_all_executables_completed"] = "failed"
         result["error"] = {
