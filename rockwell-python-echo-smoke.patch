@@ -1,0 +1,989 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..5f9dae3
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,9 @@
++# Repository-owned Python environment and generated smoke artifacts
++.venv/
++python/artifacts/
++
++# Python bytecode and tool caches
++__pycache__/
++*.py[cod]
++.pytest_cache/
++.mypy_cache/
+diff --git a/Jenkinsfile.smoke b/Jenkinsfile.smoke
+index b0475a5..4392037 100644
+--- a/Jenkinsfile.smoke
++++ b/Jenkinsfile.smoke
+@@ -6,9 +6,19 @@ pipeline {
+         disableConcurrentBuilds()
+     }
+ 
++    parameters {
++        booleanParam(
++            name: 'RUN_PYTHON_ECHO_SMOKE',
++            defaultValue: false,
++            description: 'Run the read-only FactoryTalk Logix Echo Python connectivity smoke test.'
++        )
++    }
++
+     environment {
+         SOLUTION_DIR = '2-cicd-config\\1-ci-teststage\\2-ci-unittestscript'
+         SOLUTION_FILE = 'LogixUnitTesting.sln'
++        PYTHON_EXE = 'C:\\Program Files\\Python312\\python.exe'
++        ECHO_SDK_WHEEL = 'C:\\Users\\Public\\Documents\\FactoryTalk Logix Echo\\SDK\\Python\\ftecho_sdk-4.0.0-py3-none-any.whl'
+     }
+ 
+     stages {
+@@ -70,11 +80,36 @@ pipeline {
+                 '''
+             }
+         }
++
++        stage('Python Echo Setup') {
++            options {
++                timeout(time: 10, unit: 'MINUTES')
++            }
++            when {
++                expression { params.RUN_PYTHON_ECHO_SMOKE }
++            }
++            steps {
++                bat '''
++                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%WORKSPACE%\\python\\scripts\\setup_venv.ps1" -PythonExecutable "%PYTHON_EXE%" -EchoSdkWheel "%ECHO_SDK_WHEEL%" -VenvPath "%WORKSPACE%\\.venv"
++                '''
++            }
++        }
++
++        stage('Python Echo Read-Only Smoke') {
++            when {
++                expression { params.RUN_PYTHON_ECHO_SMOKE }
++            }
++            steps {
++                bat '''
++                    "%WORKSPACE%\\.venv\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\echo_connectivity.py" --output "%WORKSPACE%\\python\\artifacts\\echo-connectivity.json" --timeout-seconds 30
++                '''
++            }
++        }
+     }
+ 
+     post {
+         always {
+-            archiveArtifacts artifacts: '2-cicd-config/1-ci-teststage/2-ci-unittestscript/**/bin/Release/**/*',
++            archiveArtifacts artifacts: '2-cicd-config/1-ci-teststage/2-ci-unittestscript/**/bin/Release/**/*,python/artifacts/*.json',
+                              allowEmptyArchive: true,
+                              fingerprint: true
+         }
+@@ -87,4 +122,4 @@ pipeline {
+             echo 'Jenkins smoke pipeline failed. Review the first failing stage.'
+         }
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/python/README.md b/python/README.md
+new file mode 100644
+index 0000000..8e93f52
+--- /dev/null
++++ b/python/README.md
+@@ -0,0 +1,78 @@
++# FactoryTalk Logix Echo Python smoke test
++
++This folder contains the first Python milestone for the Rockwell CI/CD lab. It proves that Python can import the FactoryTalk Logix Echo SDK and perform read-only service queries.
++
++## Safety boundary
++
++The smoke test calls only these documented SDK methods:
++
++- `get_product_info()`
++- `get_license_info()`
++- `list_chassis()`
++- `list_controllers()`
++
++It does not create, update, start, stop, download to, or delete controllers. The JSON artifact records inventory counts, not controller or chassis names.
++
++## Confirmed SDK requirements
++
++- Package: `ftecho_sdk` 4.0.0
++- Import: `from ftecho_sdk import ServiceApiClientV2`
++- Supported Python: 3.12 or 3.13
++- Recommended Python: 3.12 x64
++- SDK wheel SHA256: `460F75777CE30CEF72CD606E83BC320DE212B2C1CBB8EB776AA8535CA3B53BA9`
++
++Python was not installed when the SDK inventory was collected. Install Python 3.12 x64 for all users at `C:\Program Files\Python312`. An all-users installation is required so Jenkins running as `NT AUTHORITY\SYSTEM` can use it.
++
++## Manual test before Jenkins
++
++Run these commands in Windows PowerShell from the repository root:
++
++```powershell
++powershell.exe -NoProfile -ExecutionPolicy Bypass `
++  -File ".\python\scripts\setup_venv.ps1"
++
++& ".\.venv\Scripts\python.exe" `
++  ".\python\smoke\echo_connectivity.py" `
++  --output ".\python\artifacts\echo-connectivity.json"
++
++$LASTEXITCODE
++Get-Content ".\python\artifacts\echo-connectivity.json"
++```
++
++A successful test returns exit code `0` and writes a JSON artifact with `"status": "passed"`.
++
++## Jenkins integration
++
++`Jenkinsfile.smoke` keeps the Python stages disabled by default. After the manual test passes:
++
++1. Open the `Rockwell-CICD-Smoke` job.
++2. Choose **Build with Parameters**.
++3. Enable `RUN_PYTHON_ECHO_SMOKE`.
++4. Run the build.
++
++Jenkins creates its own repository-local `.venv`, runs the same read-only test under `NT AUTHORITY\SYSTEM`, and archives `python/artifacts/echo-connectivity.json`.
++
++## Exit codes
++
++| Code | Meaning |
++|---:|---|
++| 0 | Success |
++| 1 | Unexpected test failure |
++| 2 | Configuration error |
++| 3 | Python dependency or SDK import error |
++| 4 | Echo service unavailable or SDK service error |
++| 5 | Cleanup failure, reserved for later lifecycle tests |
++
++## Rollback
++
++The Jenkins parameter defaults to disabled, so clearing `RUN_PYTHON_ECHO_SMOKE` immediately restores the previous pipeline behavior.
++
++To remove the repository change after it is committed, use `git revert <python-smoke-commit>`. Generated files can be removed separately:
++
++```powershell
++$repo = (Resolve-Path ".").Path
++Remove-Item -LiteralPath (Join-Path $repo ".venv") -Recurse -Force -ErrorAction SilentlyContinue
++Remove-Item -LiteralPath (Join-Path $repo "python\artifacts") -Recurse -Force -ErrorAction SilentlyContinue
++```
++
++No controller rollback is required because the smoke test performs no controller mutations.
+diff --git a/python/common/__init__.py b/python/common/__init__.py
+new file mode 100644
+index 0000000..00643e9
+--- /dev/null
++++ b/python/common/__init__.py
+@@ -0,0 +1 @@
++"""Shared support code for Rockwell Python smoke tests."""
+diff --git a/python/common/exit_codes.py b/python/common/exit_codes.py
+new file mode 100644
+index 0000000..58fd80a
+--- /dev/null
++++ b/python/common/exit_codes.py
+@@ -0,0 +1,8 @@
++"""Process exit codes shared by Rockwell Python tools."""
++
++SUCCESS = 0
++TEST_FAILURE = 1
++CONFIGURATION_ERROR = 2
++DEPENDENCY_ERROR = 3
++SERVICE_UNAVAILABLE = 4
++CLEANUP_FAILURE = 5
+diff --git a/python/common/logging_config.py b/python/common/logging_config.py
+new file mode 100644
+index 0000000..5072b40
+--- /dev/null
++++ b/python/common/logging_config.py
+@@ -0,0 +1,40 @@
++"""Structured logging configuration for Jenkins-friendly command output."""
++
++from __future__ import annotations
++
++import json
++import logging
++from datetime import datetime, timezone
++
++
++class JsonFormatter(logging.Formatter):
++    """Format one log record as one JSON object."""
++
++    def format(self, record: logging.LogRecord) -> str:
++        payload: dict[str, object] = {
++            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
++            "level": record.levelname,
++            "logger": record.name,
++            "message": record.getMessage(),
++        }
++
++        for field_name in ("event", "exit_code", "elapsed_seconds"):
++            if hasattr(record, field_name):
++                payload[field_name] = getattr(record, field_name)
++
++        if record.exc_info:
++            payload["exception"] = self.formatException(record.exc_info)
++
++        return json.dumps(payload, default=str, sort_keys=True)
++
++
++def configure_logging(verbose: bool = False) -> None:
++    """Configure the root logger to write JSON lines to stderr."""
++
++    handler = logging.StreamHandler()
++    handler.setFormatter(JsonFormatter())
++
++    root_logger = logging.getLogger()
++    root_logger.handlers.clear()
++    root_logger.addHandler(handler)
++    root_logger.setLevel(logging.DEBUG if verbose else logging.INFO)
+diff --git a/python/common/result.py b/python/common/result.py
+new file mode 100644
+index 0000000..01c0f0d
+--- /dev/null
++++ b/python/common/result.py
+@@ -0,0 +1,58 @@
++"""Helpers for writing stable JSON smoke-test artifacts."""
++
++from __future__ import annotations
++
++import json
++from pathlib import Path
++from typing import Any
++
++
++_SENSITIVE_NAME_PARTS = (
++    "key",
++    "password",
++    "secret",
++    "serial",
++    "token",
++)
++
++
++def summarize_public_attributes(value: Any) -> dict[str, object]:
++    """Return simple public attributes while excluding likely secrets."""
++
++    summary: dict[str, object] = {}
++    for name in sorted(dir(value)):
++        lowered_name = name.lower()
++        if name.startswith("_") or any(part in lowered_name for part in _SENSITIVE_NAME_PARTS):
++            continue
++
++        try:
++            attribute = getattr(value, name)
++        except Exception:
++            continue
++
++        if callable(attribute):
++            continue
++
++        if attribute is None or isinstance(attribute, (bool, float, int, str)):
++            summary[name] = attribute
++        elif isinstance(attribute, (list, tuple)):
++            summary[name] = {"count": len(attribute)}
++        else:
++            summary[name] = str(attribute)
++
++        if len(summary) >= 50:
++            break
++
++    return summary
++
++
++def write_json_result(path: Path, payload: dict[str, object]) -> None:
++    """Write a JSON artifact atomically."""
++
++    path.parent.mkdir(parents=True, exist_ok=True)
++    temporary_path = path.with_suffix(path.suffix + ".tmp")
++    temporary_path.write_text(
++        json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n",
++        encoding="utf-8",
++    )
++    temporary_path.replace(path)
+diff --git a/python/requirements/echo-sdk.lock.txt b/python/requirements/echo-sdk.lock.txt
+new file mode 100644
+index 0000000..3df69cc
+--- /dev/null
++++ b/python/requirements/echo-sdk.lock.txt
+@@ -0,0 +1,8 @@
++# Direct requirements come from ftecho_sdk 4.0.0 metadata.
++# Transitive requirements are pinned so repeated setup runs resolve the same environment.
++cffi==1.17.1
++clr-loader==0.2.7.post0
++pycparser==2.22
++pythonnet==3.0.5
++typeguard==4.4.4
++typing-extensions==4.15.0
+diff --git a/python/scripts/inventory_rockwell_python_sdks.ps1 b/python/scripts/inventory_rockwell_python_sdks.ps1
+new file mode 100644
+index 0000000..9cb5cd2
+--- /dev/null
++++ b/python/scripts/inventory_rockwell_python_sdks.ps1
+@@ -0,0 +1,228 @@
++[CmdletBinding()]
++param(
++    [string[]]$SdkRoots = @(
++        "C:\Users\Public\Documents\FactoryTalk Logix Echo\SDK\Python",
++        "C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python"
++    ),
++    [string]$OutputDirectory = (Join-Path `
++        ([Environment]::GetFolderPath("Desktop")) `
++        ("rockwell-sdk-inventory-{0}" -f (Get-Date -Format "yyyyMMdd-HHmmss")))
++)
++
++Set-StrictMode -Version Latest
++$ErrorActionPreference = "Stop"
++
++function Get-SdkLabel {
++    param([string]$Path)
++
++    if ($Path -match "Echo") {
++        return "FactoryTalkLogixEcho"
++    }
++
++    if ($Path -match "Designer") {
++        return "LogixDesigner"
++    }
++
++    return "Sdk"
++}
++
++function Get-RelativePath {
++    param(
++        [string]$Root,
++        [string]$Path
++    )
++
++    $normalizedRoot = $Root.TrimEnd("\") + "\"
++    if ($Path.StartsWith($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
++        return $Path.Substring($normalizedRoot.Length)
++    }
++
++    return [System.IO.Path]::GetFileName($Path)
++}
++
++function Get-PythonCommandInfo {
++    $results = New-Object System.Collections.Generic.List[object]
++
++    foreach ($name in @("py", "python", "python3")) {
++        $command = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
++        if ($null -ne $command) {
++            $versionOutput = ""
++            try {
++                $versionOutput = (& $command.Source --version 2>&1 | Out-String).Trim()
++            }
++            catch {
++                $versionOutput = $_.Exception.Message
++            }
++
++            $results.Add([pscustomobject]@{
++                Name = $name
++                Path = $command.Source
++                Version = $versionOutput
++            })
++        }
++    }
++
++    return $results.ToArray()
++}
++
++New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
++$evidenceRoot = Join-Path $OutputDirectory "evidence"
++New-Item -ItemType Directory -Path $evidenceRoot -Force | Out-Null
++
++Add-Type -AssemblyName System.IO.Compression.FileSystem
++
++$rootRecords = New-Object System.Collections.Generic.List[object]
++$fileRecords = New-Object System.Collections.Generic.List[object]
++$wheelRecords = New-Object System.Collections.Generic.List[object]
++$missingRoots = New-Object System.Collections.Generic.List[string]
++
++foreach ($sdkRoot in $SdkRoots) {
++    $label = Get-SdkLabel -Path $sdkRoot
++    $exists = Test-Path -LiteralPath $sdkRoot -PathType Container
++
++    $rootRecords.Add([pscustomobject]@{
++        Label = $label
++        Path = $sdkRoot
++        Exists = $exists
++    })
++
++    if (-not $exists) {
++        $missingRoots.Add($sdkRoot)
++        continue
++    }
++
++    $files = @(Get-ChildItem -LiteralPath $sdkRoot -Recurse -File | Sort-Object FullName)
++    foreach ($file in $files) {
++        $relativePath = Get-RelativePath -Root $sdkRoot -Path $file.FullName
++        $sha256 = $null
++
++        if ($file.Extension -ieq ".whl") {
++            $sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
++        }
++
++        $fileRecords.Add([pscustomobject]@{
++            Sdk = $label
++            RelativePath = $relativePath
++            Length = $file.Length
++            LastWriteTimeUtc = $file.LastWriteTimeUtc.ToString("o")
++            Sha256 = $sha256
++        })
++
++        $isTextExtension = $file.Extension -in @(
++            ".md", ".txt", ".rst", ".json", ".toml", ".yaml", ".yml", ".py", ".ps1"
++        )
++        $isEvidencePath = (
++            $file.Name -match "^(readme|requirements|license|notice)" -or
++            $file.DirectoryName -match "(sample|samples|example|examples|demo|docs|documentation)"
++        )
++
++        if ($isTextExtension -and $isEvidencePath -and $file.Length -le 2MB) {
++            $destination = Join-Path (Join-Path $evidenceRoot $label) $relativePath
++            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
++            Copy-Item -LiteralPath $file.FullName -Destination $destination -Force
++        }
++
++        if ($file.Extension -ine ".whl") {
++            continue
++        }
++
++        $wheelEvidenceRoot = Join-Path `
++            (Join-Path $evidenceRoot "wheel-metadata") `
++            ([System.IO.Path]::GetFileNameWithoutExtension($file.Name))
++        New-Item -ItemType Directory -Path $wheelEvidenceRoot -Force | Out-Null
++
++        $archive = [System.IO.Compression.ZipFile]::OpenRead($file.FullName)
++        try {
++            $entryNames = @($archive.Entries | ForEach-Object { $_.FullName })
++            $topLevelEntries = @(
++                $entryNames |
++                    Where-Object { $_ -notmatch "\.dist-info/" -and $_ -notmatch "\.data/" } |
++                    ForEach-Object { ($_ -split "/")[0] } |
++                    Where-Object { $_ -and $_ -notmatch "^__pycache__$" } |
++                    Sort-Object -Unique
++            )
++
++            foreach ($entry in $archive.Entries) {
++                if ($entry.FullName -notmatch "\.dist-info/(METADATA|WHEEL|top_level\.txt|entry_points\.txt)$") {
++                    continue
++                }
++
++                $destinationName = ($entry.FullName -replace '[\\/:*?"<>|]', "_")
++                $destination = Join-Path $wheelEvidenceRoot $destinationName
++                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destination, $true)
++            }
++
++            $wheelRecords.Add([pscustomobject]@{
++                Sdk = $label
++                FileName = $file.Name
++                RelativePath = $relativePath
++                Length = $file.Length
++                Sha256 = $sha256
++                TopLevelEntries = $topLevelEntries
++                EntryNames = $entryNames
++            })
++        }
++        finally {
++            $archive.Dispose()
++        }
++    }
++}
++
++$services = @(
++    Get-Service -ErrorAction SilentlyContinue |
++        Where-Object {
++            $_.Name -match "Echo|Rockwell|FactoryTalk" -or
++            $_.DisplayName -match "Echo|Rockwell|FactoryTalk"
++        } |
++        Select-Object Status, Name, DisplayName
++)
++
++$inventory = [ordered]@{
++    GeneratedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
++    ComputerName = $env:COMPUTERNAME
++    PowerShellVersion = $PSVersionTable.PSVersion.ToString()
++    OperatingSystem = [pscustomobject]@{
++        Version = [Environment]::OSVersion.VersionString
++        Architecture = $env:PROCESSOR_ARCHITECTURE
++    }
++    PythonCommands = @(Get-PythonCommandInfo)
++    RockwellServices = $services
++    SdkRoots = $rootRecords.ToArray()
++    Files = $fileRecords.ToArray()
++    Wheels = $wheelRecords.ToArray()
++}
++
++$jsonPath = Join-Path $OutputDirectory "inventory.json"
++$inventory | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
++
++$summaryPath = Join-Path $OutputDirectory "summary.txt"
++@(
++    "Rockwell Python SDK inventory"
++    "Generated: $($inventory.GeneratedAtUtc)"
++    "Computer: $($inventory.ComputerName)"
++    "SDK roots found: $(@($rootRecords | Where-Object Exists).Count) / $($rootRecords.Count)"
++    "Files inventoried: $($fileRecords.Count)"
++    "Wheels found: $($wheelRecords.Count)"
++    "Missing SDK roots: $($missingRoots.Count)"
++) | Set-Content -LiteralPath $summaryPath -Encoding UTF8
++
++$zipPath = "$OutputDirectory.zip"
++if (Test-Path -LiteralPath $zipPath) {
++    Remove-Item -LiteralPath $zipPath -Force
++}
++Compress-Archive -LiteralPath $OutputDirectory -DestinationPath $zipPath -CompressionLevel Optimal
++
++Write-Host "Inventory folder: $OutputDirectory"
++Write-Host "Upload this archive to Codex: $zipPath"
++
++if ($missingRoots.Count -gt 0) {
++    Write-Error ("Missing SDK roots: {0}" -f ($missingRoots -join "; ")) -ErrorAction Continue
++    exit 2
++}
++
++if ($wheelRecords.Count -eq 0) {
++    Write-Error "No Python wheel files were found in the SDK roots." -ErrorAction Continue
++    exit 3
++}
++
++exit 0
+diff --git a/python/scripts/setup_venv.ps1 b/python/scripts/setup_venv.ps1
+new file mode 100644
+index 0000000..d0670ca
+--- /dev/null
++++ b/python/scripts/setup_venv.ps1
+@@ -0,0 +1,118 @@
++[CmdletBinding()]
++param(
++    [string]$PythonExecutable = "",
++    [string]$EchoSdkWheel = "",
++    [string]$VenvPath = ""
++)
++
++Set-StrictMode -Version Latest
++$ErrorActionPreference = "Stop"
++
++$ExpectedWheelSha256 = "460F75777CE30CEF72CD606E83BC320DE212B2C1CBB8EB776AA8535CA3B53BA9"
++$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
++$RequirementsFile = Join-Path $RepoRoot "python\requirements\echo-sdk.lock.txt"
++
++if ([string]::IsNullOrWhiteSpace($PythonExecutable)) {
++    $PythonExecutable = "C:\Program Files\Python312\python.exe"
++}
++
++if ([string]::IsNullOrWhiteSpace($EchoSdkWheel)) {
++    $EchoSdkWheel = "C:\Users\Public\Documents\FactoryTalk Logix Echo\SDK\Python\ftecho_sdk-4.0.0-py3-none-any.whl"
++}
++
++if ([string]::IsNullOrWhiteSpace($VenvPath)) {
++    $VenvPath = Join-Path $RepoRoot ".venv"
++}
++
++function Invoke-Checked {
++    param(
++        [string]$Executable,
++        [string[]]$Arguments,
++        [string]$Description
++    )
++
++    Write-Host $Description
++    & $Executable @Arguments
++    if ($LASTEXITCODE -ne 0) {
++        throw "$Description failed with exit code $LASTEXITCODE."
++    }
++}
++
++try {
++    if (-not (Test-Path -LiteralPath $PythonExecutable -PathType Leaf)) {
++        throw "Python 3.12 was not found at '$PythonExecutable'. Install Python 3.12 x64 for all users or pass -PythonExecutable."
++    }
++
++    if (-not (Test-Path -LiteralPath $EchoSdkWheel -PathType Leaf)) {
++        throw "The Echo SDK wheel was not found at '$EchoSdkWheel'."
++    }
++
++    if (-not (Test-Path -LiteralPath $RequirementsFile -PathType Leaf)) {
++        throw "The dependency lock file was not found at '$RequirementsFile'."
++    }
++
++    Invoke-Checked `
++        -Executable $PythonExecutable `
++        -Arguments @(
++            "-c",
++            "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 12)"
++        ) `
++        -Description "Validating Python 3.12"
++
++    $actualWheelSha256 = (Get-FileHash -LiteralPath $EchoSdkWheel -Algorithm SHA256).Hash
++    if ($actualWheelSha256 -ine $ExpectedWheelSha256) {
++        throw "Echo SDK wheel SHA256 mismatch. Expected $ExpectedWheelSha256, received $actualWheelSha256."
++    }
++
++    if (-not (Test-Path -LiteralPath (Join-Path $VenvPath "Scripts\python.exe") -PathType Leaf)) {
++        Invoke-Checked `
++            -Executable $PythonExecutable `
++            -Arguments @("-m", "venv", $VenvPath) `
++            -Description "Creating repository virtual environment at '$VenvPath'"
++    }
++
++    $VenvPython = Join-Path $VenvPath "Scripts\python.exe"
++    Invoke-Checked `
++        -Executable $VenvPython `
++        -Arguments @(
++            "-c",
++            "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 12)"
++        ) `
++        -Description "Validating virtual environment Python version"
++
++    Invoke-Checked `
++        -Executable $VenvPython `
++        -Arguments @(
++            "-m", "pip", "install", "--disable-pip-version-check", "--no-input",
++            "--requirement", $RequirementsFile
++        ) `
++        -Description "Installing pinned Echo SDK dependencies"
++
++    Invoke-Checked `
++        -Executable $VenvPython `
++        -Arguments @(
++            "-m", "pip", "install", "--disable-pip-version-check", "--no-input",
++            "--no-deps", "--force-reinstall", $EchoSdkWheel
++        ) `
++        -Description "Installing verified local Echo SDK wheel"
++
++    Invoke-Checked `
++        -Executable $VenvPython `
++        -Arguments @("-m", "pip", "check") `
++        -Description "Checking installed Python dependencies"
++
++    Invoke-Checked `
++        -Executable $VenvPython `
++        -Arguments @(
++            "-c",
++            "from importlib.metadata import version; import ftecho_sdk; print('ftecho_sdk=' + version('ftecho_sdk'))"
++        ) `
++        -Description "Validating Echo SDK import"
++
++    Write-Host "Virtual environment setup completed successfully."
++    exit 0
++}
++catch {
++    [Console]::Error.WriteLine($_.Exception.Message)
++    exit 2
++}
+diff --git a/python/smoke/echo_connectivity.py b/python/smoke/echo_connectivity.py
+new file mode 100644
+index 0000000..2c24bf2
+--- /dev/null
++++ b/python/smoke/echo_connectivity.py
+@@ -0,0 +1,196 @@
++"""Read-only connectivity smoke test for FactoryTalk Logix Echo 4.0."""
++
++from __future__ import annotations
++
++import argparse
++import asyncio
++import json
++import logging
++import platform
++import sys
++import time
++from datetime import datetime, timezone
++from importlib import metadata
++from pathlib import Path
++from typing import Any
++
++PYTHON_ROOT = Path(__file__).resolve().parents[1]
++if str(PYTHON_ROOT) not in sys.path:
++    sys.path.insert(0, str(PYTHON_ROOT))
++
++from common import exit_codes  # noqa: E402
++from common.logging_config import configure_logging  # noqa: E402
++from common.result import summarize_public_attributes, write_json_result  # noqa: E402
++
++
++LOGGER = logging.getLogger("echo_connectivity")
++EMPTY_GUID = "00000000-0000-0000-0000-000000000000"
++DEFAULT_OUTPUT = PYTHON_ROOT / "artifacts" / "echo-connectivity.json"
++
++
++def parse_args() -> argparse.Namespace:
++    parser = argparse.ArgumentParser(
++        description="Run read-only connectivity checks against FactoryTalk Logix Echo."
++    )
++    parser.add_argument(
++        "--output",
++        type=Path,
++        default=DEFAULT_OUTPUT,
++        help="JSON artifact path. Defaults to python/artifacts/echo-connectivity.json.",
++    )
++    parser.add_argument(
++        "--timeout-seconds",
++        type=float,
++        default=30.0,
++        help="Maximum duration for all Echo API calls. Defaults to 30 seconds.",
++    )
++    parser.add_argument("--verbose", action="store_true")
++    args = parser.parse_args()
++    if args.timeout_seconds <= 0:
++        parser.error("--timeout-seconds must be greater than zero")
++    return args
++
++
++def base_result() -> dict[str, Any]:
++    return {
++        "schema_version": 1,
++        "smoke_test": "factorytalk_logix_echo_read_only_connectivity",
++        "read_only": True,
++        "started_at_utc": datetime.now(timezone.utc).isoformat(),
++        "host": platform.node(),
++        "python_version": platform.python_version(),
++        "checks": {},
++    }
++
++
++def finish(
++    result: dict[str, Any],
++    output_path: Path,
++    exit_code: int,
++    started: float,
++) -> int:
++    result["exit_code"] = exit_code
++    result["status"] = "passed" if exit_code == exit_codes.SUCCESS else "failed"
++    result["elapsed_seconds"] = round(time.monotonic() - started, 3)
++    result["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
++
++    try:
++        write_json_result(output_path.resolve(), result)
++    except OSError as error:
++        LOGGER.exception(
++            "Unable to write the JSON result artifact",
++            extra={"event": "result_write_failed", "exit_code": exit_codes.CONFIGURATION_ERROR},
++        )
++        result["status"] = "failed"
++        result["exit_code"] = exit_codes.CONFIGURATION_ERROR
++        result["error"] = {
++            "type": type(error).__name__,
++            "message": str(error),
++        }
++        print(json.dumps(result, indent=2, sort_keys=True, default=str))
++        return exit_codes.CONFIGURATION_ERROR
++
++    print(json.dumps(result, indent=2, sort_keys=True, default=str))
++    LOGGER.info(
++        "Echo connectivity smoke test finished",
++        extra={
++            "event": "smoke_finished",
++            "exit_code": exit_code,
++            "elapsed_seconds": result["elapsed_seconds"],
++        },
++    )
++    return exit_code
++
++
++async def run_read_only_probe(service_api_client_type: Any) -> dict[str, Any]:
++    LOGGER.info("Creating Echo service client", extra={"event": "service_client_create"})
++    service_client = service_api_client_type.create()
++
++    LOGGER.info("Reading Echo product information", extra={"event": "product_info_read"})
++    product_info = await service_client.get_product_info()
++
++    LOGGER.info("Reading Echo license status", extra={"event": "license_info_read"})
++    license_info = await service_client.get_license_info()
++
++    LOGGER.info("Listing Echo chassis", extra={"event": "chassis_list_read"})
++    chassis = list(await service_client.list_chassis())
++
++    LOGGER.info("Listing chassis-less controllers", extra={"event": "compact_controller_list_read"})
++    compact_controllers = list(await service_client.list_controllers(EMPTY_GUID))
++
++    chassis_controller_count = 0
++    for chassis_item in chassis:
++        controllers = await service_client.list_controllers(chassis_item.chassis_guid)
++        chassis_controller_count += len(list(controllers))
++
++    return {
++        "product_info": summarize_public_attributes(product_info),
++        "license_info": summarize_public_attributes(license_info),
++        "inventory_counts": {
++            "chassis": len(chassis),
++            "chassis_less_controllers": len(compact_controllers),
++            "controllers_in_chassis": chassis_controller_count,
++            "controllers_total": len(compact_controllers) + chassis_controller_count,
++        },
++    }
++
++
++def main() -> int:
++    args = parse_args()
++    configure_logging(args.verbose)
++    started = time.monotonic()
++    result = base_result()
++
++    if not ((3, 12) <= sys.version_info[:2] < (3, 14)):
++        result["error"] = {
++            "type": "UnsupportedPythonVersion",
++            "message": "ftecho_sdk 4.0.0 requires Python 3.12 or 3.13; Python 3.12 is recommended.",
++        }
++        return finish(result, args.output, exit_codes.CONFIGURATION_ERROR, started)
++
++    try:
++        from ftecho_sdk import FTEchoSdkError, ServiceApiClientV2
++
++        result["sdk_version"] = metadata.version("ftecho_sdk")
++        result["checks"]["sdk_import"] = "passed"
++    except Exception as error:
++        LOGGER.exception("Unable to import the Echo SDK", extra={"event": "sdk_import_failed"})
++        result["checks"]["sdk_import"] = "failed"
++        result["error"] = {"type": type(error).__name__, "message": str(error)}
++        return finish(result, args.output, exit_codes.DEPENDENCY_ERROR, started)
++
++    try:
++        probe_result = asyncio.run(
++            asyncio.wait_for(
++                run_read_only_probe(ServiceApiClientV2),
++                timeout=args.timeout_seconds,
++            )
++        )
++        result["checks"].update(
++            {
++                "service_connectivity": "passed",
++                "product_info_read": "passed",
++                "license_info_read": "passed",
++                "inventory_read": "passed",
++            }
++        )
++        result.update(probe_result)
++        return finish(result, args.output, exit_codes.SUCCESS, started)
++    except TimeoutError as error:
++        LOGGER.exception("Echo API calls timed out", extra={"event": "service_timeout"})
++        result["checks"]["service_connectivity"] = "failed"
++        result["error"] = {"type": type(error).__name__, "message": str(error)}
++        return finish(result, args.output, exit_codes.SERVICE_UNAVAILABLE, started)
++    except FTEchoSdkError as error:
++        LOGGER.exception("Echo SDK reported an error", extra={"event": "service_error"})
++        result["checks"]["service_connectivity"] = "failed"
++        result["error"] = {"type": type(error).__name__, "message": str(error)}
++        return finish(result, args.output, exit_codes.SERVICE_UNAVAILABLE, started)
++    except Exception as error:
++        LOGGER.exception("Unexpected smoke-test failure", extra={"event": "unexpected_error"})
++        result["error"] = {"type": type(error).__name__, "message": str(error)}
++        return finish(result, args.output, exit_codes.TEST_FAILURE, started)
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/python/tests/test_echo_connectivity.py b/python/tests/test_echo_connectivity.py
+new file mode 100644
+index 0000000..e907cda
+--- /dev/null
++++ b/python/tests/test_echo_connectivity.py
+@@ -0,0 +1,110 @@
++"""Offline regression tests for the Echo connectivity smoke test."""
++
++from __future__ import annotations
++
++import json
++import sys
++import tempfile
++import types
++import unittest
++from contextlib import redirect_stdout
++from io import StringIO
++from pathlib import Path
++from unittest.mock import patch
++
++PYTHON_ROOT = Path(__file__).resolve().parents[1]
++if str(PYTHON_ROOT) not in sys.path:
++    sys.path.insert(0, str(PYTHON_ROOT))
++
++from common import exit_codes  # noqa: E402
++from smoke import echo_connectivity  # noqa: E402
++
++
++class FakeFTEchoSdkError(Exception):
++    """Stand-in for the Rockwell SDK exception type."""
++
++
++class FakeProductInfo:
++    product_name = "FactoryTalk Logix Echo"
++    version = "4.0"
++
++
++class FakeLicenseInfo:
++    state = "active"
++    license_key = "must-not-be-serialized"
++
++
++class FakeChassis:
++    chassis_guid = "11111111-1111-1111-1111-111111111111"
++
++
++class FakeServiceClient:
++    calls: list[tuple[str, object | None]] = []
++
++    @classmethod
++    def create(cls) -> "FakeServiceClient":
++        cls.calls.append(("create", None))
++        return cls()
++
++    async def get_product_info(self) -> FakeProductInfo:
++        self.calls.append(("get_product_info", None))
++        return FakeProductInfo()
++
++    async def get_license_info(self) -> FakeLicenseInfo:
++        self.calls.append(("get_license_info", None))
++        return FakeLicenseInfo()
++
++    async def list_chassis(self) -> list[FakeChassis]:
++        self.calls.append(("list_chassis", None))
++        return [FakeChassis()]
++
++    async def list_controllers(self, chassis_guid: object) -> list[object]:
++        self.calls.append(("list_controllers", chassis_guid))
++        if chassis_guid == echo_connectivity.EMPTY_GUID:
++            return [object()]
++        return [object(), object()]
++
++
++class EchoConnectivityTests(unittest.TestCase):
++    def test_success_path_uses_only_expected_read_methods(self) -> None:
++        fake_module = types.ModuleType("ftecho_sdk")
++        fake_module.FTEchoSdkError = FakeFTEchoSdkError
++        fake_module.ServiceApiClientV2 = FakeServiceClient
++        FakeServiceClient.calls = []
++
++        with tempfile.TemporaryDirectory() as temporary_directory:
++            output_path = Path(temporary_directory) / "result.json"
++            argv = ["echo_connectivity.py", "--output", str(output_path)]
++
++            with (
++                patch.dict(sys.modules, {"ftecho_sdk": fake_module}),
++                patch.object(echo_connectivity.metadata, "version", return_value="4.0.0"),
++                patch.object(sys, "argv", argv),
++                redirect_stdout(StringIO()),
++            ):
++                exit_code = echo_connectivity.main()
++
++            self.assertEqual(exit_codes.SUCCESS, exit_code)
++            result = json.loads(output_path.read_text(encoding="utf-8"))
++            self.assertEqual("passed", result["status"])
++            self.assertTrue(result["read_only"])
++            self.assertEqual(1, result["inventory_counts"]["chassis"])
++            self.assertEqual(3, result["inventory_counts"]["controllers_total"])
++            self.assertNotIn("license_key", result["license_info"])
++
++            called_methods = [name for name, _ in FakeServiceClient.calls]
++            self.assertEqual(
++                [
++                    "create",
++                    "get_product_info",
++                    "get_license_info",
++                    "list_chassis",
++                    "list_controllers",
++                    "list_controllers",
++                ],
++                called_methods,
++            )
++
++
++if __name__ == "__main__":
++    unittest.main()

@@ -1,0 +1,14 @@
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\bin\Release\net8.0-windows7.0\FtspAdapter.exe
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\bin\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.deps.json
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\bin\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.dll
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\bin\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.pdb
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\obj\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.csproj.AssemblyReference.cache
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\obj\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.GeneratedMSBuildEditorConfig.editorconfig
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\obj\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.AssemblyInfoInputs.cache
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\obj\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.AssemblyInfo.cs
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\obj\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.csproj.CoreCompileInputs.cache
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\obj\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.sourcelink.json
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\obj\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.dll
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\obj\Release\net8.0-windows7.0\refint\LogixEcho_ClassLibrary.dll
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\obj\Release\net8.0-windows7.0\LogixEcho_ClassLibrary.pdb
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixEcho_ClassLibrary\obj\Release\net8.0-windows7.0\ref\LogixEcho_ClassLibrary.dll

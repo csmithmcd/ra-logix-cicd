@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "0r3sN/ee0WA=",
+  "dgSpecHash": "LMElp8v+lyM=",
   "success": true,
-  "projectFilePath": "C:\\Users\\ASYost\\Desktop\\RA_CICD_FINAL\\ra-cicd-test6\\2-cicd-config\\1-ci-teststage\\2-ci-unittestscript\\ConsoleFormatter_ClassLibrary\\ConsoleFormatter_ClassLibrary.csproj",
+  "projectFilePath": "C:\\Projects\\ra-logix-cicd\\2-cicd-config\\1-ci-teststage\\2-ci-unittestscript\\ConsoleFormatter_ClassLibrary\\ConsoleFormatter_ClassLibrary.csproj",
   "expectedPackageFiles": [],
   "logs": []
 }

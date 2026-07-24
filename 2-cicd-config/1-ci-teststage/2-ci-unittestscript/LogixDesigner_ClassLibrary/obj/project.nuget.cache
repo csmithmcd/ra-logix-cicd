@@ -1,16 +1,25 @@
 {
   "version": 2,
-  "dgSpecHash": "O0YYFRwRS8A=",
+  "dgSpecHash": "DABGfRugMNs=",
   "success": true,
-  "projectFilePath": "C:\\Users\\ASYost\\Desktop\\RA_CICD_FINAL\\ra-cicd-test6\\2-cicd-config\\1-ci-teststage\\2-ci-unittestscript\\LogixDesigner_ClassLibrary\\LogixDesigner_ClassLibrary.csproj",
+  "projectFilePath": "C:\\Projects\\ra-logix-cicd\\2-cicd-config\\1-ci-teststage\\2-ci-unittestscript\\LogixDesigner_ClassLibrary\\LogixDesigner_ClassLibrary.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\ASYost\\.nuget\\packages\\google.protobuf\\3.26.1\\google.protobuf.3.26.1.nupkg.sha512",
-    "C:\\Users\\ASYost\\.nuget\\packages\\grpc.core.api\\2.62.0\\grpc.core.api.2.62.0.nupkg.sha512",
-    "C:\\Users\\ASYost\\.nuget\\packages\\grpc.net.client\\2.62.0\\grpc.net.client.2.62.0.nupkg.sha512",
-    "C:\\Users\\ASYost\\.nuget\\packages\\grpc.net.common\\2.62.0\\grpc.net.common.2.62.0.nupkg.sha512",
-    "C:\\Users\\ASYost\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\6.0.0\\microsoft.extensions.logging.abstractions.6.0.0.nupkg.sha512",
-    "C:\\Users\\ASYost\\.nuget\\packages\\newtonsoft.json\\13.0.3\\newtonsoft.json.13.0.3.nupkg.sha512",
-    "C:\\Users\\ASYost\\.nuget\\packages\\rockwellautomation.logixdesigner.csclient\\2.0.774\\rockwellautomation.logixdesigner.csclient.2.0.774.nupkg.sha512"
+    "C:\\Users\\csmith\\.nuget\\packages\\google.protobuf\\3.33.4\\google.protobuf.3.33.4.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\grpc.core.api\\2.76.0\\grpc.core.api.2.76.0.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\grpc.net.client\\2.76.0\\grpc.net.client.2.76.0.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\grpc.net.common\\2.76.0\\grpc.net.common.2.76.0.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.configuration\\10.0.2\\microsoft.extensions.configuration.10.0.2.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.configuration.abstractions\\10.0.2\\microsoft.extensions.configuration.abstractions.10.0.2.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.configuration.environmentvariables\\10.0.2\\microsoft.extensions.configuration.environmentvariables.10.0.2.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.configuration.fileextensions\\10.0.2\\microsoft.extensions.configuration.fileextensions.10.0.2.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.configuration.json\\10.0.2\\microsoft.extensions.configuration.json.10.0.2.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.0\\microsoft.extensions.dependencyinjection.abstractions.8.0.0.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.fileproviders.abstractions\\10.0.2\\microsoft.extensions.fileproviders.abstractions.10.0.2.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.fileproviders.physical\\10.0.2\\microsoft.extensions.fileproviders.physical.10.0.2.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.filesystemglobbing\\10.0.2\\microsoft.extensions.filesystemglobbing.10.0.2.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\8.0.0\\microsoft.extensions.logging.abstractions.8.0.0.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\microsoft.extensions.primitives\\10.0.2\\microsoft.extensions.primitives.10.0.2.nupkg.sha512",
+    "C:\\Users\\csmith\\.nuget\\packages\\rockwellautomation.logixdesigner.csclient\\2.2.1109\\rockwellautomation.logixdesigner.csclient.2.2.1109.nupkg.sha512"
   ],
   "logs": []
 }

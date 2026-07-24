@@ -1,0 +1,16 @@
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\bin\Release\net10.0\LogixDesigner_ClassLibrary.deps.json
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\bin\Release\net10.0\LogixDesigner_ClassLibrary.dll
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\bin\Release\net10.0\LogixDesigner_ClassLibrary.pdb
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\bin\Release\net10.0\ConsoleFormatter_ClassLibrary.dll
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\bin\Release\net10.0\ConsoleFormatter_ClassLibrary.pdb
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\LogixDesigner_ClassLibrary.csproj.AssemblyReference.cache
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\LogixDesigner_ClassLibrary.GeneratedMSBuildEditorConfig.editorconfig
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\LogixDesigner_ClassLibrary.AssemblyInfoInputs.cache
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\LogixDesigner_ClassLibrary.AssemblyInfo.cs
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\LogixDesigner_ClassLibrary.csproj.CoreCompileInputs.cache
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\LogixDesigner_ClassLibrary.sourcelink.json
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\LogixDes.932CA4DA.Up2Date
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\LogixDesigner_ClassLibrary.dll
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\refint\LogixDesigner_ClassLibrary.dll
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\LogixDesigner_ClassLibrary.pdb
+C:\Projects\ra-logix-cicd\2-cicd-config\1-ci-teststage\2-ci-unittestscript\LogixDesigner_ClassLibrary\obj\Release\net10.0\ref\LogixDesigner_ClassLibrary.dll
