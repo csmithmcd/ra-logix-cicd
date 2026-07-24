@@ -40,9 +40,11 @@ class FakeExecutable:
 class FakeOpenedProject:
     calls: list[str] = []
     close_error: Exception | None = None
+    executables: list[FakeExecutable] = []
 
     async def get_all_executables(self) -> list[FakeExecutable]:
-        raise AssertionError("Executable enumeration is gated until project open is proven")
+        self.calls.append("get_all_executables")
+        return self.executables
 
     def close(self) -> None:
         self.calls.append("close")
@@ -95,6 +97,7 @@ class LogixDesignerExecutablesTests(unittest.TestCase):
         FakeLogixProject.opened_paths = []
         FakeOpenedProject.calls = []
         FakeOpenedProject.close_error = None
+        FakeOpenedProject.executables = []
 
     def test_success_uses_a_copy_closes_project_and_removes_copy(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -135,6 +138,7 @@ class LogixDesignerExecutablesTests(unittest.TestCase):
             self.assertEqual("passed", result["status"])
             self.assertTrue(result["read_only"])
             self.assertTrue(result["working_copy_used"])
+            self.assertFalse(result["executable_enumeration_enabled"])
             self.assertEqual("2.0.2", result["sdk_version"])
             self.assertEqual(
                 "logix_designer_read_only_open_project", result["smoke_test"]
@@ -157,6 +161,55 @@ class LogixDesignerExecutablesTests(unittest.TestCase):
                 result["checks"],
             )
             self.assertNotIn("password", result_text)
+            self.assertNotIn(" at 0x", result_text)
+
+    def test_enumeration_is_opt_in_and_secret_filtered(self) -> None:
+        FakeOpenedProject.executables = [
+            FakeExecutable("Zulu", "Routine"),
+            FakeExecutable("Alpha", "AOI"),
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source_path = root / "Project.ACD"
+            source_path.write_bytes(b"test project")
+            output_path = root / "result.json"
+            argv = [
+                "logix_designer_executables.py",
+                "--project",
+                str(source_path),
+                "--output",
+                str(output_path),
+                "--enumerate-executables",
+            ]
+
+            with (
+                patch.dict(sys.modules, fake_sdk_modules()),
+                patch.object(
+                    logix_designer_executables.metadata,
+                    "version",
+                    return_value="2.0.2",
+                ),
+                patch.object(sys, "argv", argv),
+                redirect_stdout(StringIO()),
+            ):
+                exit_code = logix_designer_executables.main()
+
+            result_text = output_path.read_text(encoding="utf-8")
+            result = json.loads(result_text)
+            self.assertEqual(exit_codes.SUCCESS, exit_code)
+            self.assertEqual(["get_all_executables", "close"], FakeOpenedProject.calls)
+            self.assertTrue(result["executable_enumeration_enabled"])
+            self.assertEqual(
+                "logix_designer_read_only_get_all_executables",
+                result["smoke_test"],
+            )
+            self.assertEqual("passed", result["checks"]["get_all_executables_started"])
+            self.assertEqual("passed", result["checks"]["get_all_executables_completed"])
+            self.assertEqual(2, result["executables_count"])
+            self.assertEqual("Alpha", result["executables"][0]["attributes"]["name"])
+            self.assertNotIn("password", result_text)
+            self.assertNotIn("must-not-be-serialized", result_text)
             self.assertNotIn(" at 0x", result_text)
 
     def test_close_failure_returns_cleanup_exit_code(self) -> None:

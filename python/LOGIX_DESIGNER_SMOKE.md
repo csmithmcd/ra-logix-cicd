@@ -1,6 +1,6 @@
 # Logix Designer Python read-only smoke
 
-This milestone proves that the Logix Designer Python SDK can safely open and close a disposable ACD copy. Executable enumeration, Jenkins execution, and all controller-facing operations remain separately gated.
+This milestone proves that the Logix Designer Python SDK can safely open and close a disposable ACD copy. Executable enumeration is a separate, explicit read-only operation; controller-facing operations remain out of scope.
 
 ## Proven interactive baseline
 
@@ -23,7 +23,7 @@ The repository probe never passes the source project to the SDK. It:
 4. Verifies the source SHA-256 is unchanged.
 5. Removes the disposable copy.
 
-It does not enumerate executables, save, build, download, upload, change communications paths, go online, or communicate with a controller.
+It does not save, build, download, upload, change communications paths, go online, or communicate with a controller. Executable enumeration occurs only when `--enumerate-executables` is supplied.
 
 ## Repository venv setup
 
@@ -54,8 +54,24 @@ $LASTEXITCODE
 Get-Content "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-open-project.json"
 ```
 
+## Read-only executable enumeration
+
+Only after the open/close probe passes, run the explicit enumeration probe. It calls Rockwell's `get_all_executables()` only after the disposable copy opens, returns deterministic secret-filtered summaries, closes the copy, and performs the same source-integrity and cleanup checks.
+
+```powershell
+& "C:\Projects\ra-logix-cicd\.venv-logix-designer-py313\Scripts\python.exe" `
+  "C:\Projects\ra-logix-cicd\python\smoke\logix_designer_executables.py" `
+  --project "C:\Projects\ra-logix-cicd\1-production-files\ACDs\ExampleForCICD_L85E.ACD" `
+  --output "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-executables.json" `
+  --timeout-seconds 600 `
+  --enumerate-executables
+
+$LASTEXITCODE
+Get-Content "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-executables.json"
+```
+
 ## Jenkins gate
 
-`RUN_PYTHON_LOGIX_DESIGNER_SMOKE` remains `false` by default. Before enabling it, install Python 3.13.14 x64 for all users at `C:\Program Files\Python313\python.exe` (or provide an equivalent path through `LOGIX_DESIGNER_PYTHON_EXE`). Jenkins runs as `NT AUTHORITY\SYSTEM` and must not depend on the per-user interpreter above.
+`RUN_PYTHON_LOGIX_DESIGNER_SMOKE` and `RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION` both remain `false` by default. Before enabling either, install Python 3.13.14 x64 for all users at `C:\Program Files\Python313\python.exe` (or provide an equivalent path through `LOGIX_DESIGNER_PYTHON_EXE`). Jenkins runs as `NT AUTHORITY\SYSTEM` and must not depend on the per-user interpreter above.
 
-When deliberately enabled, Jenkins uses the Python 3.13 lock, a repository-owned venv, a disposable copy of the known-good ACD, a 600-second SDK timeout, and archives the JSON artifact. Do not enable executable enumeration until a separate review advances the read-only scope.
+The open/close parameter produces `logix-designer-open-project.json`. The enumeration parameter runs a separate stage and produces `logix-designer-executables.json`. Both use the Python 3.13 lock, a repository-owned venv, a disposable ACD copy, a 600-second SDK timeout, and archived JSON artifacts.

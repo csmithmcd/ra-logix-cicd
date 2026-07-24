@@ -22,6 +22,11 @@ pipeline {
             defaultValue: 'C:\\Program Files\\Python313\\python.exe',
             description: 'Python 3.13 x64 executable used only when the Logix Designer smoke is enabled.'
         )
+        booleanParam(
+            name: 'RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION',
+            defaultValue: false,
+            description: 'Read executable metadata from a disposable ACD copy. Keep disabled until manually validated.'
+        )
     }
 
     environment {
@@ -123,7 +128,10 @@ pipeline {
                 timeout(time: 10, unit: 'MINUTES')
             }
             when {
-                expression { params.RUN_PYTHON_LOGIX_DESIGNER_SMOKE }
+                expression {
+                    params.RUN_PYTHON_LOGIX_DESIGNER_SMOKE ||
+                    params.RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION
+                }
             }
             steps {
                 bat '''
@@ -141,7 +149,21 @@ pipeline {
             }
             steps {
                 bat '''
-                    "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-executables.json" --timeout-seconds 600
+                    "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-open-project.json" --timeout-seconds 600
+                '''
+            }
+        }
+
+        stage('Python Logix Designer Executable Enumeration') {
+            options {
+                timeout(time: 12, unit: 'MINUTES')
+            }
+            when {
+                expression { params.RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION }
+            }
+            steps {
+                bat '''
+                    "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-executables.json" --timeout-seconds 600 --enumerate-executables
                 '''
             }
         }

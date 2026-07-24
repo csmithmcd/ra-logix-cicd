@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
 if str(PYTHON_ROOT) not in sys.path:
@@ -24,7 +24,7 @@ if str(PYTHON_ROOT) not in sys.path:
 
 from common import exit_codes  # noqa: E402
 from common.logging_config import configure_logging  # noqa: E402
-from common.result import write_json_result  # noqa: E402
+from common.result import summarize_public_attributes, write_json_result  # noqa: E402
 
 
 LOGGER = logging.getLogger("logix_designer_open_project")
@@ -40,7 +40,7 @@ class ProjectCloseError(RuntimeError):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Open and close a disposable ACD/L5X copy with the Logix Designer SDK."
+            "Open a disposable ACD/L5X copy with the Logix Designer SDK."
         )
     )
     parser.add_argument(
@@ -48,6 +48,14 @@ def parse_args() -> argparse.Namespace:
         required=True,
         type=Path,
         help="Source ACD or L5X project. The SDK opens a temporary copy, never this file.",
+    )
+    parser.add_argument(
+        "--enumerate-executables",
+        action="store_true",
+        help=(
+            "Read executable metadata from the disposable copy after it opens. "
+            "Disabled by default."
+        ),
     )
     parser.add_argument(
         "--output",
@@ -84,12 +92,36 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest().upper()
 
 
+def summarize_executables(executables: Iterable[Any]) -> list[dict[str, object]]:
+    """Return deterministic, secret-filtered executable summaries."""
+
+    summaries: list[dict[str, object]] = []
+    for executable in executables:
+        if executable is None or isinstance(executable, (bool, float, int, str)):
+            summary: dict[str, object] = {
+                "type": type(executable).__name__,
+                "value": executable,
+            }
+        else:
+            summary = {
+                "type": type(executable).__name__,
+                "attributes": summarize_public_attributes(executable),
+            }
+        summaries.append(summary)
+
+    return sorted(
+        summaries,
+        key=lambda value: json.dumps(value, default=str, sort_keys=True),
+    )
+
+
 def base_result() -> dict[str, Any]:
     return {
         "schema_version": 1,
         "smoke_test": "logix_designer_read_only_open_project",
         "read_only": True,
         "working_copy_used": True,
+        "executable_enumeration_enabled": False,
         "started_at_utc": datetime.now(timezone.utc).isoformat(),
         "host": platform.node(),
         "python_version": platform.python_version(),
@@ -111,6 +143,17 @@ def base_result() -> dict[str, Any]:
 
 def _normalise_seconds(value: float) -> int | float:
     return int(value) if value.is_integer() else value
+
+
+def operation_description(operation: str) -> str:
+    """Return a stable SDK operation label for failure artifacts."""
+
+    labels = {
+        "open_logix_project": "LogixProject.open_logix_project",
+        "get_all_executables": "LogixProject.get_all_executables",
+        "close_project": "LogixProject.close",
+    }
+    return labels.get(operation, operation)
 
 
 def capture_windows_diagnostics(
@@ -251,7 +294,8 @@ async def run_read_only_probe(
     project_copy: Path,
     checks: dict[str, str],
     operation_state: dict[str, str],
-) -> None:
+    enumerate_executables: bool,
+) -> list[dict[str, object]] | None:
     project = None
     operation_state["current_operation"] = "open_logix_project"
     checks["project_open_started"] = "passed"
@@ -264,6 +308,18 @@ async def run_read_only_probe(
         )
         checks["project_open_completed"] = "passed"
         operation_state["current_operation"] = "project_opened"
+        if enumerate_executables:
+            operation_state["current_operation"] = "get_all_executables"
+            checks["get_all_executables_started"] = "passed"
+            LOGGER.info(
+                "Reading disposable project executables",
+                extra={"event": "get_all_executables_started"},
+            )
+            executables = await project.get_all_executables()
+            checks["get_all_executables_completed"] = "passed"
+            operation_state["current_operation"] = "project_opened"
+            return summarize_executables(executables)
+        return None
     finally:
         if project is not None:
             operation_state["current_operation"] = "close_project"
@@ -285,6 +341,9 @@ def main() -> int:
     configure_logging(args.verbose)
     started = time.monotonic()
     result = base_result()
+    result["executable_enumeration_enabled"] = args.enumerate_executables
+    if args.enumerate_executables:
+        result["smoke_test"] = "logix_designer_read_only_get_all_executables"
     checks: dict[str, str] = result["checks"]
     operation_state = {"current_operation": "input_validation"}
 
@@ -349,7 +408,7 @@ def main() -> int:
             raise OSError("The disposable project copy failed SHA256 verification")
         checks["working_copy"] = "passed"
 
-        asyncio.run(
+        executable_summaries = asyncio.run(
             asyncio.wait_for(
                 run_read_only_probe(
                     LogixProject,
@@ -357,10 +416,14 @@ def main() -> int:
                     project_copy,
                     checks,
                     operation_state,
+                    args.enumerate_executables,
                 ),
                 timeout=args.timeout_seconds,
             )
         )
+        if executable_summaries is not None:
+            result["executables"] = executable_summaries
+            result["executables_count"] = len(executable_summaries)
     except TimeoutError as error:
         LOGGER.exception(
             "Logix Designer SDK operation timed out", extra={"event": "sdk_timeout"}
@@ -368,12 +431,14 @@ def main() -> int:
         operation = operation_state["current_operation"]
         if operation == "open_logix_project":
             checks["project_open_completed"] = "failed"
+        elif operation == "get_all_executables":
+            checks["get_all_executables_completed"] = "failed"
         timeout_seconds = _normalise_seconds(args.timeout_seconds)
         result["error"] = {
             "type": type(error).__name__,
             "message": (
                 f"Timed out after {timeout_seconds} seconds while waiting for "
-                "LogixProject.open_logix_project."
+                f"{operation_description(operation)}."
             ),
             "operation": operation,
             "timeout_seconds": timeout_seconds,
@@ -399,6 +464,8 @@ def main() -> int:
         operation = operation_state["current_operation"]
         if operation == "open_logix_project":
             checks["project_open_completed"] = "failed"
+        elif operation == "get_all_executables":
+            checks["get_all_executables_completed"] = "failed"
         result["error"] = {
             "type": type(error).__name__,
             "message": str(error),
@@ -427,6 +494,8 @@ def main() -> int:
         operation = operation_state["current_operation"]
         if operation == "open_logix_project":
             checks["project_open_completed"] = "failed"
+        elif operation == "get_all_executables":
+            checks["get_all_executables_completed"] = "failed"
         result["error"] = {
             "type": type(error).__name__,
             "message": str(error),
