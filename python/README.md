@@ -1,6 +1,6 @@
 # FactoryTalk Logix Echo Python smoke test
 
-The next isolated milestone is documented in [LOGIX_DESIGNER_SMOKE.md](LOGIX_DESIGNER_SMOKE.md).
+The Logix Designer SDK baseline is documented in [LOGIX_DESIGNER_SMOKE.md](LOGIX_DESIGNER_SMOKE.md). The Git-aware routine comparison milestone is documented in [LOGIX_CODE_COMPARE.md](LOGIX_CODE_COMPARE.md).
 
 This folder contains the first Python milestone for the Rockwell CI/CD lab. It proves that Python can import the FactoryTalk Logix Echo SDK and perform read-only service queries.
 
