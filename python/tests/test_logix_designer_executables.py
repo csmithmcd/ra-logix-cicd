@@ -39,6 +39,7 @@ class FakeExecutable:
 
 class FakeOpenedProject:
     calls: list[str] = []
+    build_error: Exception | None = None
     close_error: Exception | None = None
     executables: list[FakeExecutable] = []
 
@@ -49,6 +50,11 @@ class FakeOpenedProject:
     async def get_communications_path(self) -> str:
         self.calls.append("get_communications_path")
         return "EmulateEthernet\\127.0.0.1"
+
+    async def build(self) -> None:
+        self.calls.append("build")
+        if self.build_error is not None:
+            raise self.build_error
 
     def close(self) -> None:
         self.calls.append("close")
@@ -100,6 +106,7 @@ class LogixDesignerExecutablesTests(unittest.TestCase):
     def setUp(self) -> None:
         FakeLogixProject.opened_paths = []
         FakeOpenedProject.calls = []
+        FakeOpenedProject.build_error = None
         FakeOpenedProject.close_error = None
         FakeOpenedProject.executables = []
 
@@ -144,6 +151,7 @@ class LogixDesignerExecutablesTests(unittest.TestCase):
             self.assertTrue(result["working_copy_used"])
             self.assertFalse(result["executable_enumeration_enabled"])
             self.assertFalse(result["project_inventory_enabled"])
+            self.assertFalse(result["build_validation_enabled"])
             self.assertEqual("2.0.2", result["sdk_version"])
             self.assertEqual(
                 "logix_designer_read_only_open_project", result["smoke_test"]
@@ -161,6 +169,8 @@ class LogixDesignerExecutablesTests(unittest.TestCase):
                     "get_communications_path_completed": "not_run",
                     "get_all_executables_started": "not_run",
                     "get_all_executables_completed": "not_run",
+                    "build_started": "not_run",
+                    "build_completed": "not_run",
                     "project_close_started": "passed",
                     "project_close_completed": "passed",
                     "working_copy_cleanup": "passed",
@@ -169,6 +179,84 @@ class LogixDesignerExecutablesTests(unittest.TestCase):
             )
             self.assertNotIn("password", result_text)
             self.assertNotIn(" at 0x", result_text)
+
+    def test_build_validation_is_opt_in_and_does_not_save(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source_path = root / "Project.ACD"
+            source_path.write_bytes(b"test project")
+            output_path = root / "result.json"
+            argv = [
+                "logix_designer_executables.py",
+                "--project",
+                str(source_path),
+                "--output",
+                str(output_path),
+                "--build-validation",
+            ]
+
+            with (
+                patch.dict(sys.modules, fake_sdk_modules()),
+                patch.object(
+                    logix_designer_executables.metadata,
+                    "version",
+                    return_value="2.0.2",
+                ),
+                patch.object(sys, "argv", argv),
+                redirect_stdout(StringIO()),
+            ):
+                exit_code = logix_designer_executables.main()
+
+            result = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(exit_codes.SUCCESS, exit_code)
+            self.assertEqual(["build", "close"], FakeOpenedProject.calls)
+            self.assertTrue(result["build_validation_enabled"])
+            self.assertEqual(
+                "logix_designer_offline_build_validation", result["smoke_test"]
+            )
+            self.assertEqual("passed", result["checks"]["build_started"])
+            self.assertEqual("passed", result["checks"]["build_completed"])
+            self.assertNotIn("save", FakeOpenedProject.calls)
+
+    def test_build_failure_preserves_operation_and_closes_project(self) -> None:
+        FakeOpenedProject.build_error = FakeLogixSdkError(
+            "Operation not supported on Logix Designer version 36.4."
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            source_path = root / "Project.ACD"
+            source_path.write_bytes(b"test project")
+            output_path = root / "result.json"
+            argv = [
+                "logix_designer_executables.py",
+                "--project",
+                str(source_path),
+                "--output",
+                str(output_path),
+                "--build-validation",
+            ]
+
+            with (
+                patch.dict(sys.modules, fake_sdk_modules()),
+                patch.object(
+                    logix_designer_executables.metadata,
+                    "version",
+                    return_value="2.0.2",
+                ),
+                patch.object(sys, "argv", argv),
+                redirect_stdout(StringIO()),
+            ):
+                exit_code = logix_designer_executables.main()
+
+            result = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(exit_codes.SERVICE_UNAVAILABLE, exit_code)
+            self.assertEqual(["build", "close"], FakeOpenedProject.calls)
+            self.assertEqual("failed", result["checks"]["build_completed"])
+            self.assertEqual("passed", result["checks"]["project_close_completed"])
+            self.assertEqual("build", result["error"]["operation"])
+            self.assertEqual("passed", result["checks"]["source_unchanged"])
+            self.assertEqual("passed", result["checks"]["working_copy_cleanup"])
 
     def test_project_inventory_is_opt_in_and_includes_communications_path(self) -> None:
         FakeOpenedProject.executables = [FakeExecutable("Main", "Routine")]

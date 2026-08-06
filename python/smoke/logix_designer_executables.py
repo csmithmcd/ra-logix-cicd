@@ -66,6 +66,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--build-validation",
+        action="store_true",
+        help=(
+            "Build the disposable copy using the SDK default target without saving it. "
+            "Disabled by default."
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
@@ -131,6 +139,7 @@ def base_result() -> dict[str, Any]:
         "working_copy_used": True,
         "executable_enumeration_enabled": False,
         "project_inventory_enabled": False,
+        "build_validation_enabled": False,
         "started_at_utc": datetime.now(timezone.utc).isoformat(),
         "host": platform.node(),
         "python_version": platform.python_version(),
@@ -144,6 +153,8 @@ def base_result() -> dict[str, Any]:
             "get_communications_path_completed": "not_run",
             "get_all_executables_started": "not_run",
             "get_all_executables_completed": "not_run",
+            "build_started": "not_run",
+            "build_completed": "not_run",
             "project_close_started": "not_run",
             "project_close_completed": "not_run",
             "source_unchanged": "not_run",
@@ -163,6 +174,7 @@ def operation_description(operation: str) -> str:
         "open_logix_project": "LogixProject.open_logix_project",
         "get_communications_path": "LogixProject.get_communications_path",
         "get_all_executables": "LogixProject.get_all_executables",
+        "build": "LogixProject.build",
         "close_project": "LogixProject.close",
     }
     return labels.get(operation, operation)
@@ -308,6 +320,7 @@ async def run_read_only_probe(
     operation_state: dict[str, str],
     enumerate_executables: bool,
     project_inventory: bool,
+    build_validation: bool,
 ) -> dict[str, Any]:
     project = None
     operation_state["current_operation"] = "open_logix_project"
@@ -343,9 +356,20 @@ async def run_read_only_probe(
             checks["get_all_executables_completed"] = "passed"
             operation_state["current_operation"] = "project_opened"
             inventory["executables"] = summarize_executables(executables)
+        if build_validation:
+            operation_state["current_operation"] = "build"
+            checks["build_started"] = "passed"
+            LOGGER.info(
+                "Building disposable project copy",
+                extra={"event": "build_started"},
+            )
+            await project.build()
+            checks["build_completed"] = "passed"
+            operation_state["current_operation"] = "project_opened"
         return inventory
     finally:
         if project is not None:
+            interrupted_operation = operation_state["current_operation"]
             operation_state["current_operation"] = "close_project"
             checks["project_close_started"] = "passed"
             LOGGER.info(
@@ -354,7 +378,11 @@ async def run_read_only_probe(
             try:
                 project.close()
                 checks["project_close_completed"] = "passed"
-                operation_state["current_operation"] = "completed"
+                operation_state["current_operation"] = (
+                    "completed"
+                    if interrupted_operation == "project_opened"
+                    else interrupted_operation
+                )
             except Exception as error:
                 checks["project_close_completed"] = "failed"
                 raise ProjectCloseError(str(error)) from error
@@ -368,7 +396,10 @@ def main() -> int:
     enumerate_executables = args.enumerate_executables or args.project_inventory
     result["executable_enumeration_enabled"] = enumerate_executables
     result["project_inventory_enabled"] = args.project_inventory
-    if args.project_inventory:
+    result["build_validation_enabled"] = args.build_validation
+    if args.build_validation:
+        result["smoke_test"] = "logix_designer_offline_build_validation"
+    elif args.project_inventory:
         result["smoke_test"] = "logix_designer_read_only_project_inventory"
     elif args.enumerate_executables:
         result["smoke_test"] = "logix_designer_read_only_get_all_executables"
@@ -446,6 +477,7 @@ def main() -> int:
                     operation_state,
                     enumerate_executables,
                     args.project_inventory,
+                    args.build_validation,
                 ),
                 timeout=args.timeout_seconds,
             )
@@ -466,6 +498,8 @@ def main() -> int:
             checks["get_communications_path_completed"] = "failed"
         elif operation == "get_all_executables":
             checks["get_all_executables_completed"] = "failed"
+        elif operation == "build":
+            checks["build_completed"] = "failed"
         timeout_seconds = _normalise_seconds(args.timeout_seconds)
         result["error"] = {
             "type": type(error).__name__,
@@ -501,6 +535,8 @@ def main() -> int:
             checks["get_communications_path_completed"] = "failed"
         elif operation == "get_all_executables":
             checks["get_all_executables_completed"] = "failed"
+        elif operation == "build":
+            checks["build_completed"] = "failed"
         result["error"] = {
             "type": type(error).__name__,
             "message": str(error),
@@ -533,6 +569,8 @@ def main() -> int:
             checks["get_communications_path_completed"] = "failed"
         elif operation == "get_all_executables":
             checks["get_all_executables_completed"] = "failed"
+        elif operation == "build":
+            checks["build_completed"] = "failed"
         result["error"] = {
             "type": type(error).__name__,
             "message": str(error),

@@ -1,6 +1,6 @@
 # Logix Designer Python read-only smoke
 
-This milestone proves that the Logix Designer Python SDK can safely open and close a disposable ACD copy. Executable enumeration and project inventory are separate, explicit read-only operations; controller-facing operations remain out of scope.
+This milestone proves that the Logix Designer Python SDK can safely open and close a disposable ACD copy. Executable enumeration and project inventory are separate, explicit read-only operations. Controller-facing operations remain out of scope.
 
 ## Proven interactive baseline
 
@@ -23,7 +23,7 @@ The repository probe never passes the source project to the SDK. It:
 4. Verifies the source SHA-256 is unchanged.
 5. Removes the disposable copy.
 
-It does not save, build, download, upload, change communications paths, go online, or communicate with a controller. Executable enumeration occurs only when `--enumerate-executables` is supplied. Project inventory occurs only when `--project-inventory` is supplied and reads the project communications path plus executable inventory.
+It does not save, download, upload, change communications paths, go online, or communicate with a controller. Executable enumeration occurs only when `--enumerate-executables` is supplied. Project inventory occurs only when `--project-inventory` is supplied and reads the project communications path plus executable inventory. Offline build validation occurs only when `--build-validation` is supplied; it calls `build()` on the disposable copy and never calls `save()`.
 
 ## Repository venv setup
 
@@ -84,6 +84,24 @@ Only after executable enumeration passes, run the explicit project-inventory pro
 
 $LASTEXITCODE
 Get-Content "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-project-inventory.json"
+```
+
+## Offline build validation
+
+Rockwell's SDK documentation states that `LogixProject.build()` is supported starting with Logix Designer v37. Earlier releases throw `OperationFailedError`. The lab VM has Logix Designer 36.04, and its manual probe confirmed the documented failure: `Operation not supported on Logix Designer version 36.4.`
+
+Do not add or enable a Jenkins build-validation gate on this VM. The repository probe retains the explicit `--build-validation` diagnostic for future validation after upgrading to Logix Designer v37 or later. It operates only on a disposable copy and never calls `save()`, `download()`, `go_online()`, or another controller-facing method.
+
+```powershell
+& "C:\Projects\ra-logix-cicd\.venv-logix-designer-system-py313\Scripts\python.exe" `
+  "C:\Projects\ra-logix-cicd\python\smoke\logix_designer_executables.py" `
+  --project "C:\Projects\ra-logix-cicd\1-production-files\ACDs\ExampleForCICD_L85E.ACD" `
+  --output "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-build-validation.json" `
+  --timeout-seconds 600 `
+  --build-validation
+
+$LASTEXITCODE
+Get-Content "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-build-validation.json"
 ```
 
 ## Jenkins gate
