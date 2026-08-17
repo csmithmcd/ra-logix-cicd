@@ -37,6 +37,11 @@ pipeline {
             defaultValue: false,
             description: 'Compare routine logic between HEAD^ and HEAD using the Logix Designer SDK. Reports added/removed/modified routines; differences do not fail the build.'
         )
+        booleanParam(
+            name: 'RUN_PYTHON_ECHO_DEPLOY',
+            defaultValue: false,
+            description: 'Create CICD_TEST_01 in Echo, download ExampleForCICD_L85E, verify HARD_RUN, delete. Runs under NT AUTHORITY/SYSTEM -- no interactive desktop required.'
+        )
         string(
             name: 'LOGIX_DESIGNER_CODE_COMPARE_BASE',
             defaultValue: 'HEAD^',
@@ -200,6 +205,20 @@ pipeline {
             steps {
                 bat '''
                     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%WORKSPACE%\\python\\scripts\\invoke_ld_sdk_interactive.ps1" -PythonExe "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" -ScriptPath "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" -AcdPath "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" -OutputPath "%WORKSPACE%\\python\\artifacts\\logix-designer-project-inventory.json" -TimeoutSeconds 600 -ModeFlag "--project-inventory"
+                '''
+            }
+        }
+
+        stage('Python Echo Deploy') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            when {
+                expression { params.RUN_PYTHON_ECHO_DEPLOY }
+            }
+            steps {
+                bat '''
+                    "%WORKSPACE%\\.venv\\Scripts\\python.exe" "%WORKSPACE%\\python\\deploy\\echo_deploy.py" --acd "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\echo-deploy.json" --timeout-seconds 300
                 '''
             }
         }

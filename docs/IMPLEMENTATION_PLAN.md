@@ -100,20 +100,24 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for decisions, constraints, and the targe
 
 **Goal:** Create an Echo controller, download a project to it, and put it in RUN mode programmatically.
 
-This phase is the first that modifies Echo state. It must not run until Phase 2 is fully proven under Jenkins (Local System confirmed able to reach the Echo service).
-
 | Task | Status | Notes |
 |---|---|---|
-| Investigate Echo SDK controller lifecycle API | ⬜ | Need to find: create_controller, download, set_mode |
-| Controller naming convention | ⬜ | Proposed: `CICD_TEST_01` |
-| `deploy.py` — create/reset/download/run | ⬜ | Must use `try/finally` for cleanup |
-| Cleanup: stop and delete controller after each run | ⬜ | Leave no state on the Echo service |
-| JSON artifact with controller state evidence | ⬜ | |
-| Jenkins `rockwell-ci deploy` stage | ⬜ | |
+| Investigate Echo SDK controller lifecycle API | ✅ | `ServiceApiClientV2`: `create_controller`, `download`, `update_controller`, `delete_controller`. `get_controller_info_from_acd` reads firmware GUID and slot from the ACD. |
+| Controller naming convention | ✅ | `CICD_TEST_01` in dedicated `CICD_TEST_CHASSIS` |
+| `python/deploy/echo_deploy.py` | ✅ | Idempotent pre-flight, `try/finally` cleanup, 12/12 checks |
+| Cleanup: stop and delete controller after each run | ✅ | Controller + chassis both deleted in `finally` |
+| JSON artifact with controller state evidence | ✅ | `python/artifacts/echo-deploy.json` |
+| Jenkins `RUN_PYTHON_ECHO_DEPLOY` stage | 🔶 | Added to Jenkinsfile.smoke. Not yet run under Jenkins. |
+| Manual validation | ✅ | 2026-08-17. Exit 0. 74s. `controller_mode: HARD_RUN`, `is_in_run_mode: true`, `loaded_project: ExampleWithCICD_L85E`. |
 
-**Design constraint:** The deploy stage must be idempotent. If a previous run left `CICD_TEST_01` behind, the script must detect and reset it rather than failing. Use a unique, unambiguous controller name that will never conflict with a real-use controller.
+**Phase 4 is manually validated. Jenkins gate pending.**
 
-**Safety boundary:** The controller must be a disposable test instance. It must not be a controller used for any other purpose. It must be deleted or reset at the end of every pipeline run, in `try/finally`.
+> **Implementation notes:**
+> - `ExampleForCICD_L85E.ACD` needs a ControlLogix chassis (not chassis-less) and has slot=0 baked in. A dedicated `CICD_TEST_CHASSIS` is created so the controller can occupy slot 0 without conflicting with existing chassis controllers.
+> - IP address: the ACD embeds `10.243.7.84` but all existing chassis controllers also use it. CICD_TEST_01 uses `127.0.0.2` (loopback alias, no adapter config needed on Windows).
+> - `update_controller` requires `Name` to be non-null. Must call `read_controller` first, use `to_controller_update()`, then modify the target field.
+> - `is_enabled=True` must be set at `create_controller` time (not after). Download fails on a stopped controller.
+> - Runs under `NT AUTHORITY/SYSTEM` — no interactive desktop required. Echo SDK is session-independent.
 
 ---
 
