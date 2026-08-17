@@ -1,0 +1,295 @@
+Exit code: 0
+Wall time: 1.1 seconds
+Output:
+diff --git a/Jenkinsfile.smoke b/Jenkinsfile.smoke
+index c4c6918..1af96a6 100644
+--- a/Jenkinsfile.smoke
++++ b/Jenkinsfile.smoke
+@@ -32,6 +32,11 @@ pipeline {
+             defaultValue: false,
+             description: 'Read project communications path and executable inventory from a disposable ACD copy. Keep disabled until manually validated.'
+         )
++        booleanParam(
++            name: 'RUN_PYTHON_LOGIX_DESIGNER_BUILD_VALIDATION',
++            defaultValue: false,
++            description: 'Build a disposable ACD copy without saving, downloading, or going online. Keep disabled until manually validated.'
++        )
+     }
+ 
+     environment {
+@@ -136,7 +141,8 @@ pipeline {
+                 expression {
+                     params.RUN_PYTHON_LOGIX_DESIGNER_SMOKE ||
+                     params.RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION ||
+-                    params.RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY
++                    params.RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY ||
++                    params.RUN_PYTHON_LOGIX_DESIGNER_BUILD_VALIDATION
+                 }
+             }
+             steps {
+@@ -187,6 +193,20 @@ pipeline {
+                 '''
+             }
+         }
++
++        stage('Python Logix Designer Offline Build Validation') {
++            options {
++                timeout(time: 12, unit: 'MINUTES')
++            }
++            when {
++                expression { params.RUN_PYTHON_LOGIX_DESIGNER_BUILD_VALIDATION }
++            }
++            steps {
++                bat '''
++                    "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-build-validation.json" --timeout-seconds 600 --build-validation
++                '''
++            }
++        }
+     }
+ 
+     post {
+diff --git a/python/LOGIX_DESIGNER_SMOKE.md b/python/LOGIX_DESIGNER_SMOKE.md
+index 0c8cd9a..2008ee5 100644
+--- a/python/LOGIX_DESIGNER_SMOKE.md
++++ b/python/LOGIX_DESIGNER_SMOKE.md
+@@ -1,6 +1,6 @@
+ # Logix Designer Python read-only smoke
+ 
+-This milestone proves that the Logix Designer Python SDK can safely open and close a disposable ACD copy. Executable enumeration and project inventory are separate, explicit read-only operations; controller-facing operations remain out of scope.
++This milestone proves that the Logix Designer Python SDK can safely open and close a disposable ACD copy. Executable enumeration and project inventory are separate, explicit read-only operations. Offline build validation is also opt-in and operates only on a disposable copy; controller-facing operations remain out of scope.
+ 
+ ## Proven interactive baseline
+ 
+@@ -23,7 +23,7 @@ The repository probe never passes the source project to the SDK. It:
+ 4. Verifies the source SHA-256 is unchanged.
+ 5. Removes the disposable copy.
+ 
+-It does not save, build, download, upload, change communications paths, go online, or communicate with a controller. Executable enumeration occurs only when `--enumerate-executables` is supplied. Project inventory occurs only when `--project-inventory` is supplied and reads the project communications path plus executable inventory.
++It does not save, download, upload, change communications paths, go online, or communicate with a controller. Executable enumeration occurs only when `--enumerate-executables` is supplied. Project inventory occurs only when `--project-inventory` is supplied and reads the project communications path plus executable inventory. Offline build validation occurs only when `--build-validation` is supplied; it calls `build()` on the disposable copy and never calls `save()`.
+ 
+ ## Repository venv setup
+ 
+@@ -86,8 +86,24 @@ $LASTEXITCODE
+ Get-Content "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-project-inventory.json"
+ ```
+ 
++## Offline build validation
++
++Only after project inventory passes, run the explicit build-validation probe. It calls Rockwell's `build()` with the SDK default target on the disposable copy, then closes and removes that copy. The probe deliberately does not call `save()`, `download()`, `go_online()`, or any controller-facing method.
++
++```powershell
++& "C:\Projects\ra-logix-cicd\.venv-logix-designer-system-py313\Scripts\python.exe" `
++  "C:\Projects\ra-logix-cicd\python\smoke\logix_designer_executables.py" `
++  --project "C:\Projects\ra-logix-cicd\1-production-files\ACDs\ExampleForCICD_L85E.ACD" `
++  --output "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-build-validation.json" `
++  --timeout-seconds 600 `
++  --build-validation
++
++$LASTEXITCODE
++Get-Content "C:\Projects\ra-logix-cicd\python\artifacts\logix-designer-build-validation.json"
++```
++
+ ## Jenkins gate
+ 
+-`RUN_PYTHON_LOGIX_DESIGNER_SMOKE`, `RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION`, and `RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY` all remain `false` by default. Before enabling any of them, install Python 3.13.14 x64 for all users at `C:\Program Files\Python313\python.exe` (or provide an equivalent path through `LOGIX_DESIGNER_PYTHON_EXE`). Jenkins runs as `NT AUTHORITY\SYSTEM`.
++`RUN_PYTHON_LOGIX_DESIGNER_SMOKE`, `RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION`, `RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY`, and `RUN_PYTHON_LOGIX_DESIGNER_BUILD_VALIDATION` all remain `false` by default. Before enabling any of them, install Python 3.13.14 x64 for all users at `C:\Program Files\Python313\python.exe` (or provide an equivalent path through `LOGIX_DESIGNER_PYTHON_EXE`). Jenkins runs as `NT AUTHORITY\SYSTEM`.
+ 
+-The open/close parameter produces `logix-designer-open-project.json`. The enumeration parameter runs a separate stage and produces `logix-designer-executables.json`. The project-inventory parameter produces `logix-designer-project-inventory.json`. All use the Python 3.13 lock, a repository-owned venv, a disposable ACD copy, a 600-second SDK timeout, and archived JSON artifacts.
++The open/close parameter produces `logix-designer-open-project.json`. The enumeration parameter runs a separate stage and produces `logix-designer-executables.json`. The project-inventory parameter produces `logix-designer-project-inventory.json`. The build-validation parameter produces `logix-designer-build-validation.json`. All use the Python 3.13 lock, a repository-owned venv, a disposable ACD copy, a 600-second SDK timeout, and archived JSON artifacts.
+diff --git a/python/smoke/logix_designer_executables.py b/python/smoke/logix_designer_executables.py
+index ea5b90f..06a1e1a 100644
+--- a/python/smoke/logix_designer_executables.py
++++ b/python/smoke/logix_designer_executables.py
+@@ -65,6 +65,14 @@ def parse_args() -> argparse.Namespace:
+             "disposable copy. Implies --enumerate-executables. Disabled by default."
+         ),
+     )
++    parser.add_argument(
++        "--build-validation",
++        action="store_true",
++        help=(
++            "Build the disposable copy using the SDK default target without saving it. "
++            "Disabled by default."
++        ),
++    )
+     parser.add_argument(
+         "--output",
+         type=Path,
+@@ -131,6 +139,7 @@ def base_result() -> dict[str, Any]:
+         "working_copy_used": True,
+         "executable_enumeration_enabled": False,
+         "project_inventory_enabled": False,
++        "build_validation_enabled": False,
+         "started_at_utc": datetime.now(timezone.utc).isoformat(),
+         "host": platform.node(),
+         "python_version": platform.python_version(),
+@@ -144,6 +153,8 @@ def base_result() -> dict[str, Any]:
+             "get_communications_path_completed": "not_run",
+             "get_all_executables_started": "not_run",
+             "get_all_executables_completed": "not_run",
++            "build_started": "not_run",
++            "build_completed": "not_run",
+             "project_close_started": "not_run",
+             "project_close_completed": "not_run",
+             "source_unchanged": "not_run",
+@@ -163,6 +174,7 @@ def operation_description(operation: str) -> str:
+         "open_logix_project": "LogixProject.open_logix_project",
+         "get_communications_path": "LogixProject.get_communications_path",
+         "get_all_executables": "LogixProject.get_all_executables",
++        "build": "LogixProject.build",
+         "close_project": "LogixProject.close",
+     }
+     return labels.get(operation, operation)
+@@ -308,6 +320,7 @@ async def run_read_only_probe(
+     operation_state: dict[str, str],
+     enumerate_executables: bool,
+     project_inventory: bool,
++    build_validation: bool,
+ ) -> dict[str, Any]:
+     project = None
+     operation_state["current_operation"] = "open_logix_project"
+@@ -343,6 +356,16 @@ async def run_read_only_probe(
+             checks["get_all_executables_completed"] = "passed"
+             operation_state["current_operation"] = "project_opened"
+             inventory["executables"] = summarize_executables(executables)
++        if build_validation:
++            operation_state["current_operation"] = "build"
++            checks["build_started"] = "passed"
++            LOGGER.info(
++                "Building disposable project copy",
++                extra={"event": "build_started"},
++            )
++            await project.build()
++            checks["build_completed"] = "passed"
++            operation_state["current_operation"] = "project_opened"
+         return inventory
+     finally:
+         if project is not None:
+@@ -368,7 +391,10 @@ def main() -> int:
+     enumerate_executables = args.enumerate_executables or args.project_inventory
+     result["executable_enumeration_enabled"] = enumerate_executables
+     result["project_inventory_enabled"] = args.project_inventory
+-    if args.project_inventory:
++    result["build_validation_enabled"] = args.build_validation
++    if args.build_validation:
++        result["smoke_test"] = "logix_designer_offline_build_validation"
++    elif args.project_inventory:
+         result["smoke_test"] = "logix_designer_read_only_project_inventory"
+     elif args.enumerate_executables:
+         result["smoke_test"] = "logix_designer_read_only_get_all_executables"
+@@ -446,6 +472,7 @@ def main() -> int:
+                     operation_state,
+                     enumerate_executables,
+                     args.project_inventory,
++                    args.build_validation,
+                 ),
+                 timeout=args.timeout_seconds,
+             )
+@@ -466,6 +493,8 @@ def main() -> int:
+             checks["get_communications_path_completed"] = "failed"
+         elif operation == "get_all_executables":
+             checks["get_all_executables_completed"] = "failed"
++        elif operation == "build":
++            checks["build_completed"] = "failed"
+         timeout_seconds = _normalise_seconds(args.timeout_seconds)
+         result["error"] = {
+             "type": type(error).__name__,
+@@ -501,6 +530,8 @@ def main() -> int:
+             checks["get_communications_path_completed"] = "failed"
+         elif operation == "get_all_executables":
+             checks["get_all_executables_completed"] = "failed"
++        elif operation == "build":
++            checks["build_completed"] = "failed"
+         result["error"] = {
+             "type": type(error).__name__,
+             "message": str(error),
+@@ -533,6 +564,8 @@ def main() -> int:
+             checks["get_communications_path_completed"] = "failed"
+         elif operation == "get_all_executables":
+             checks["get_all_executables_completed"] = "failed"
++        elif operation == "build":
++            checks["build_completed"] = "failed"
+         result["error"] = {
+             "type": type(error).__name__,
+             "message": str(error),
+diff --git a/python/tests/test_logix_designer_executables.py b/python/tests/test_logix_designer_executables.py
+index 6945625..e51d077 100644
+--- a/python/tests/test_logix_designer_executables.py
++++ b/python/tests/test_logix_designer_executables.py
+@@ -50,6 +50,9 @@ class FakeOpenedProject:
+         self.calls.append("get_communications_path")
+         return "EmulateEthernet\\127.0.0.1"
+ 
++    async def build(self) -> None:
++        self.calls.append("build")
++
+     def close(self) -> None:
+         self.calls.append("close")
+         if self.close_error is not None:
+@@ -144,6 +147,7 @@ class LogixDesignerExecutablesTests(unittest.TestCase):
+             self.assertTrue(result["working_copy_used"])
+             self.assertFalse(result["executable_enumeration_enabled"])
+             self.assertFalse(result["project_inventory_enabled"])
++            self.assertFalse(result["build_validation_enabled"])
+             self.assertEqual("2.0.2", result["sdk_version"])
+             self.assertEqual(
+                 "logix_designer_read_only_open_project", result["smoke_test"]
+@@ -161,6 +165,8 @@ class LogixDesignerExecutablesTests(unittest.TestCase):
+                     "get_communications_path_completed": "not_run",
+                     "get_all_executables_started": "not_run",
+                     "get_all_executables_completed": "not_run",
++                    "build_started": "not_run",
++                    "build_completed": "not_run",
+                     "project_close_started": "passed",
+                     "project_close_completed": "passed",
+                     "working_copy_cleanup": "passed",
+@@ -170,6 +176,44 @@ class LogixDesignerExecutablesTests(unittest.TestCase):
+             self.assertNotIn("password", result_text)
+             self.assertNotIn(" at 0x", result_text)
+ 
++    def test_build_validation_is_opt_in_and_does_not_save(self) -> None:
++        with tempfile.TemporaryDirectory() as temporary_directory:
++            root = Path(temporary_directory)
++            source_path = root / "Project.ACD"
++            source_path.write_bytes(b"test project")
++            output_path = root / "result.json"
++            argv = [
++                "logix_designer_executables.py",
++                "--project",
++                str(source_path),
++                "--output",
++                str(output_path),
++                "--build-validation",
++            ]
++
++            with (
++                patch.dict(sys.modules, fake_sdk_modules()),
++                patch.object(
++                    logix_designer_executables.metadata,
++                    "version",
++                    return_value="2.0.2",
++                ),
++                patch.object(sys, "argv", argv),
++                redirect_stdout(StringIO()),
++            ):
++                exit_code = logix_designer_executables.main()
++
++            result = json.loads(output_path.read_text(encoding="utf-8"))
++            self.assertEqual(exit_codes.SUCCESS, exit_code)
++            self.assertEqual(["build", "close"], FakeOpenedProject.calls)
++            self.assertTrue(result["build_validation_enabled"])
++            self.assertEqual(
++                "logix_designer_offline_build_validation", result["smoke_test"]
++            )
++            self.assertEqual("passed", result["checks"]["build_started"])
++            self.assertEqual("passed", result["checks"]["build_completed"])
++            self.assertNotIn("save", FakeOpenedProject.calls)
++
+     def test_project_inventory_is_opt_in_and_includes_communications_path(self) -> None:
+         FakeOpenedProject.executables = [FakeExecutable("Main", "Routine")]
+ 
+warning: in the working copy of 'Jenkinsfile.smoke', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'python/LOGIX_DESIGNER_SMOKE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'python/smoke/logix_designer_executables.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'python/tests/test_logix_designer_executables.py', LF will be replaced by CRLF the next time Git touches it
+
