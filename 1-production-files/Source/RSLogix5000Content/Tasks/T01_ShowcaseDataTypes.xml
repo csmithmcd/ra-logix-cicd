@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Task Name="T01_ShowcaseDataTypes" Type="PERIODIC" Rate="10" Priority="10" Watchdog="500" DisableUpdateOutputs="false" InhibitTask="false">
+  <ScheduledPrograms>
+    <ScheduledProgram Name="P00_ShowcaseDataTypes" />
+  </ScheduledPrograms>
+</Task>

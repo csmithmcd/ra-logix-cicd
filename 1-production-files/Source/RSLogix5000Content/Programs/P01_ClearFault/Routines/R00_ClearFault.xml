@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Routine Name="R00_ClearFault" Type="RLL">
+  <RLLContent>
+    <Rung Type="N">
+      <Comment><![CDATA[AUTOMATED TESTING | FAULT HANDLING
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+Clear the tags storing the fault Type and Code information.]]></Comment>
+      <Text><![CDATA[XIC(AT_ClearFault)CLR(AT_FaultType)CLR(AT_FaultCode);]]></Text>
+    </Rung>
+  </RLLContent>
+</Routine>

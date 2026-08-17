@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<DataType Name="FAULTRECORD" Family="NoFamily" Class="User">
+  <Members>
+    <Member Name="Time_Low" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write">
+      <Description><![CDATA[Lower 32 bits of the fault timestamp value]]></Description>
+    </Member>
+    <Member Name="Time_High" DataType="DINT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write">
+      <Description><![CDATA[Upper 32 bits of the fault timestamp value]]></Description>
+    </Member>
+    <Member Name="Type" DataType="INT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write">
+      <Description><![CDATA[Fault type (program, I/O, and so forth)]]></Description>
+    </Member>
+    <Member Name="Code" DataType="INT" Dimension="0" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write">
+      <Description><![CDATA[Unique code for the fault]]></Description>
+    </Member>
+    <Member Name="Info" DataType="DINT" Dimension="8" Radix="Decimal" Hidden="false" ExternalAccess="Read/Write">
+      <Description><![CDATA[Fault specific information]]></Description>
+    </Member>
+  </Members>
+</DataType>

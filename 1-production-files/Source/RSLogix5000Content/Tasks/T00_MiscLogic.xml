@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Task Name="T00_MiscLogic" Type="CONTINUOUS" Priority="10" Watchdog="500" DisableUpdateOutputs="false" InhibitTask="false">
+  <ScheduledPrograms>
+    <ScheduledProgram Name="P00_AND_OR_Logic" />
+    <ScheduledProgram Name="P01_ClearFault" />
+  </ScheduledPrograms>
+</Task>

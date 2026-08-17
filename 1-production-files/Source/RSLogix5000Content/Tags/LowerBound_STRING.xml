@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Tag Name="LowerBound_STRING" TagType="Base" DataType="STRING" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+  <Data Format="L5K"><![CDATA[[9,'Good Bye!$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00$00'
+		]]]></Data>
+  <Data Format="String" Length="9"><![CDATA['Good Bye!']]></Data>
+</Tag>

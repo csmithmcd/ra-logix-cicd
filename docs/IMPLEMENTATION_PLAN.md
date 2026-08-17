@@ -135,7 +135,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for decisions, constraints, and the targe
 
 ---
 
-## Phase 6 — VCS Tooling Investigation (L5XExploder)
+## Phase 6 — VCS Tooling Investigation (l5xplode)
 
 **Goal:** Determine whether Rockwell's VCS Custom Tools are installed and whether an implode operation (exploded source → L5X) is available.
 
@@ -143,15 +143,24 @@ This phase runs in parallel with Phases 4–5 and does not block them.
 
 | Task | Status | Notes |
 |---|---|---|
-| Check whether L5XExploder is installed on NIA-AUTO-ECH-01 | ⬜ | Check PATH and `C:\Program Files\Rockwell Automation\` |
-| Identify current tool name and version | ⬜ | Tool may have changed from older documentation |
-| Confirm `implode` / `explode` command syntax | ⬜ | Do not assume — read actual help output |
-| Explode ExampleForCICD_L85E.L5X into a test source folder | ⬜ | |
-| Implode back and diff against original L5X | ⬜ | Confirm lossless round-trip |
+| Check whether L5XExploder is installed on NIA-AUTO-ECH-01 | ✅ | Not pre-installed. Current tool is `l5xplode` (not `L5XExploder`). Must build from source. |
+| Identify current tool name and version | ✅ | `l5xplode` — https://github.com/RockwellAutomation/ra-logix-designer-vcs-custom-tools — cloned to `C:\Projects\ra-logix-designer-vcs-custom-tools`. Built with .NET 10.0 in 36s (0 warnings). |
+| Confirm `implode` / `explode` command syntax | ✅ | `l5xplode explode --l5x <src.L5X> --dir <outDir> [--force]` / `l5xplode implode --dir <outDir> --l5x <out.L5X> [--force]` |
+| Explode ExampleForCICD_L85E.L5X into a test source folder | ✅ | 2026-08-17. Exit 0. Output: `1-production-files/Source/RSLogix5000Content/`. 47 files: 5 programs, 25 tags, 12 routines, 2 tasks, 1 data type, 1 module. |
+| Implode back and diff against original L5X | ✅ | Exit 0. Semantically lossless: `ExportDate` stripped (by design, reduces git noise), `encoding="UTF-8"` → `utf-8`, whitespace normalized. Engineering data is identical. |
+
+**Phase 6 is complete. VCS tooling is available. Phase 9 can proceed.**
+
+> **Implementation notes:**
+> - `l5xplode` (explode/implode) works without Studio 5000 SDK — can run as `NT AUTHORITY\SYSTEM` in Jenkins.
+> - `l5xgit` (ACD↔L5X conversion, difftool, commit) requires Studio 5000 SDK — needs the `LD-SDK-Run` interactive session path.
+> - The `--unsafe-skip-dependency-check` flag is needed for L5X files exported without the Dependencies option (common in Logix Designer without that export option selected).
+> - Round-trip is semantically lossless; byte-identical is not guaranteed and not required.
+> - The tool must be built from source. Add a `setup_l5xplode.ps1` step to the Jenkins pipeline or pre-build and deploy the binary to `C:\data\`.
 
 **If VCS tools are not installed:** The single L5X remains the source of truth. The exploded source architecture (Phase 8) is deferred.
 
-**If VCS tools are installed:** The planned directory structure becomes:
+**If VCS tools are installed (current state — `l5xplode` built from source):** The planned directory structure becomes:
 
 ```
 Source/                   ← engineers commit this
@@ -202,15 +211,17 @@ Build/                    ← generated, never committed
 
 ---
 
-## Phase 9 — Exploded Source Pipeline (Conditional on Phase 6)
+## Phase 9 — Exploded Source Pipeline (Unblocked by Phase 6)
 
 **Goal:** Replace the single L5X source file with exploded source controlled at the routine level.
 
-This phase only proceeds if Phase 6 confirms VCS tooling is available and the round-trip is lossless.
+Phase 6 confirmed `l5xplode` is available and the round-trip is semantically lossless. This phase can proceed.
 
 | Task | Status | Notes |
 |---|---|---|
-| Add `rockwell-ci implode` — Source/ → Build/Controller.L5X | ⬜ | Wraps VCS tooling |
+| Commit exploded source to repo (`1-production-files/Source/`) | ⬜ | `l5xplode explode` output already tested locally. 47 files under `RSLogix5000Content/`. |
+| Jenkins stage: implode `Source/` → `Build/Controller.L5X` | ⬜ | Wraps `l5xplode implode`. No interactive session needed (no SDK dependency). |
+| Jenkins stage: build `Build/Controller.L5X` → `Build/Controller.ACD` | ⬜ | Uses `l5xgit acd2l5x` / Logix Designer SDK. Needs LD-SDK-Run path. |
 | Add source validation stage before implode | ⬜ | Schema, required files, duplicate names |
 | Update `Jenkinsfile` pipeline order | ⬜ | implode → build → deploy → test |
 | Document source folder structure and authoring workflow | ⬜ | |

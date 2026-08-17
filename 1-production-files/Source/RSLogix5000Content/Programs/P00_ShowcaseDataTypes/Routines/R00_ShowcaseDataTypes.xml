@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Routine Name="R00_ShowcaseDataTypes" Type="RLL">
+  <RLLContent>
+    <Rung Type="N">
+      <Comment><![CDATA[
+Showcase the data types that can be used by the LDSDK.]]></Comment>
+      <Text><![CDATA[NOP();]]></Text>
+    </Rung>
+    <Rung Type="N">
+      <Text><![CDATA[XIC(I_ToggleEnable_LocalTag)[XIC(I_ToggleSINT_LocalTag) MOVE(127,O_SINT_LocalTag) ,XIO(I_ToggleSINT_LocalTag) MOVE(-128,O_SINT_LocalTag) ];]]></Text>
+    </Rung>
+    <Rung Type="N">
+      <Text><![CDATA[XIC(I_ToggleEnable_LocalTag)[XIC(I_ToggleINT_LocalTag) MOVE(32767,O_INT_LocalTag) ,XIO(I_ToggleINT_LocalTag) MOVE(-32768,O_INT_LocalTag) ];]]></Text>
+    </Rung>
+    <Rung Type="N">
+      <Text><![CDATA[XIC(I_ToggleEnable_LocalTag)[XIC(I_ToggleDINT_LocalTag) MOVE(2147483647,O_DINT_LocalTag) ,XIO(I_ToggleDINT_LocalTag) MOVE(-2147483648,O_DINT_LocalTag) ];]]></Text>
+    </Rung>
+    <Rung Type="N">
+      <Text><![CDATA[XIC(I_ToggleEnable_LocalTag)[XIC(I_ToggleLINT_LocalTag) MOVE(UpperBound_LINT,O_LINT_LocalTag) ,XIO(I_ToggleLINT_LocalTag) MOVE(LowerBound_LINT,O_LINT_LocalTag) ];]]></Text>
+    </Rung>
+    <Rung Type="N">
+      <Text><![CDATA[XIC(I_ToggleEnable_LocalTag)[XIC(I_ToggleREAL_LocalTag) MOVE(UpperBound_REAL,O_REAL_LocalTag) ,XIO(I_ToggleREAL_LocalTag) MOVE(LowerBound_REAL,O_REAL_LocalTag) ];]]></Text>
+    </Rung>
+    <Rung Type="N">
+      <Text><![CDATA[XIC(I_ToggleEnable_LocalTag)[XIC(I_ToggleSTRING_LocalTag) MOVE(UpperBound_STRING,O_STRING_LocalTag) ,XIO(I_ToggleSTRING_LocalTag) MOVE(LowerBound_STRING,O_STRING_LocalTag) ];]]></Text>
+    </Rung>
+  </RLLContent>
+</Routine>

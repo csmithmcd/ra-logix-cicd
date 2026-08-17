@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Routine Name="R01_AND_Example" Type="RLL">
+  <RLLContent>
+    <Rung Type="N">
+      <Text><![CDATA[XIC(I_AND_1)XIC(I_AND_2)OTE(O_AND);]]></Text>
+    </Rung>
+  </RLLContent>
+</Routine>

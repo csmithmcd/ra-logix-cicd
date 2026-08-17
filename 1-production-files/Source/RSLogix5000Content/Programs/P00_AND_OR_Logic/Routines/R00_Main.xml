@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Routine Name="R00_Main" Type="RLL">
+  <RLLContent>
+    <Rung Type="N">
+      <Comment><![CDATA[
+AND Boolean Logic Example]]></Comment>
+      <Text><![CDATA[JSR(R01_AND_Example,0);]]></Text>
+    </Rung>
+    <Rung Type="N">
+      <Comment><![CDATA[
+OR Boolean Logic Example]]></Comment>
+      <Text><![CDATA[JSR(R02_OR_Example,0);]]></Text>
+    </Rung>
+  </RLLContent>
+</Routine>

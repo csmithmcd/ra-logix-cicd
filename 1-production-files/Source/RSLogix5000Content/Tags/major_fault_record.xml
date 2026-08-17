@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Tag Name="major_fault_record" TagType="Base" DataType="FAULTRECORD" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+  <Data Format="L5K"><![CDATA[[0,0,0,0,[0,0,0,0,0,0,0,0]]]]></Data>
+  <Data Format="Decorated">
+    <Structure DataType="FAULTRECORD">
+      <DataValueMember Name="Time_Low" DataType="DINT" Radix="Decimal" Value="0" />
+      <DataValueMember Name="Time_High" DataType="DINT" Radix="Decimal" Value="0" />
+      <DataValueMember Name="Type" DataType="INT" Radix="Decimal" Value="0" />
+      <DataValueMember Name="Code" DataType="INT" Radix="Decimal" Value="0" />
+      <ArrayMember Name="Info" DataType="DINT" Dimensions="8" Radix="Decimal">
+        <Element Index="[0]" Value="0" />
+        <Element Index="[1]" Value="0" />
+        <Element Index="[2]" Value="0" />
+        <Element Index="[3]" Value="0" />
+        <Element Index="[4]" Value="0" />
+        <Element Index="[5]" Value="0" />
+        <Element Index="[6]" Value="0" />
+        <Element Index="[7]" Value="0" />
+      </ArrayMember>
+    </Structure>
+  </Data>
+</Tag>

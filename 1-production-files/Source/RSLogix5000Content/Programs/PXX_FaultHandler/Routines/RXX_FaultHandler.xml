@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Routine Name="RXX_FaultHandler" Type="RLL">
+  <RLLContent>
+    <Rung Type="N">
+      <Comment><![CDATA[FAULT HANDLER
+													- - - - - - - - - - - - - - -
+													Get the fault (GSV) and store the fault Type and Code (MOVEs) in two tags that can be programmatically obtained during testing for better troubleshooting assistance.
+													Clear the fault Type and Code (SSV) using the major_fault_record tag for the FAULTRECORD user-defined data type.
+													Keep an indicator of fault state (OTE) for automated testing logic.
+
+													(Rung created with the assistance of https://literature.rockwellautomation.com/idc/groups/literature/documents/pm/1756-pm014_-en-p.pdf)
+													(Fault code spreadsheet link: https://literature.rockwellautomation.com/idc/groups/literature/documents/rd/1756-rd001_-en-p.xlsx)
+													]]></Comment>
+      <Text><![CDATA[GSV(Program,THIS,MajorFaultRecord,major_fault_record.Time_Low)[MOVE(major_fault_record.Type,AT_FaultType) MOVE(major_fault_record.Code,AT_FaultCode) ,CLR(major_fault_record.Type) CLR(major_fault_record.Code) ,SSV(Program,THIS,MajorFaultRecord,major_fault_record.Time_Low) ,OTE(AT_FaultedIndicator) ];]]></Text>
+    </Rung>
+  </RLLContent>
+</Routine>

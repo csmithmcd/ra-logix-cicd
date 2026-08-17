@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Tag Name="UpperBound_LINT" TagType="Base" DataType="LINT" Radix="Decimal" Constant="false" ExternalAccess="Read/Write" OpcUaAccess="None">
+  <Data Format="L5K"><![CDATA[9223372036854775807]]></Data>
+  <Data Format="Decorated">
+    <DataValue DataType="LINT" Radix="Decimal" Value="9223372036854775807" />
+  </Data>
+</Tag>
