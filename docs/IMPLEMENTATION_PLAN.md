@@ -40,29 +40,18 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for decisions, constraints, and the targe
 
 | Task | Status | Notes |
 |---|---|---|
-| SDK inventory (wheel name, import, Python version) | ✅ | `ftecho_sdk` 4.0.0, Python 3.12 |
+| SDK inventory (wheel name, import, Python version) | ✅ | `ftecho_sdk` 4.0.0, Python 3.13 |
 | `echo-sdk.lock.txt` (pinned dependencies) | ✅ | cffi, clr-loader, pycparser, pythonnet, typeguard |
 | `setup_venv.ps1` (repo-owned venv from local wheel) | ✅ | Creates `.venv` at repository root |
 | `echo_connectivity.py` (read-only probe) | ✅ | Queries product info, license, chassis, controllers |
 | JSON artifact with structured output | ✅ | `python/artifacts/echo-connectivity.json` |
 | Exit codes and structured logging | ✅ | |
 | Manual test validated interactively | ✅ | Passed on Python 3.12 (2026-07-17) and Python 3.13 (2026-08-17). Exit 0, all checks passed. 9 controllers visible in chassis. License valid. |
-| Jenkins `RUN_PYTHON_ECHO_SMOKE` stage enabled and passing | 🔶 | Parameter exists, default false — next gate |
+| Jenkins `RUN_PYTHON_ECHO_SMOKE` stage enabled and passing | ✅ | Build #13, 2026-08-17. Exit 0, all 5 checks passed under `NT AUTHORITY\SYSTEM`. Python 3.13.14. |
 
-**Next action:** Enable `RUN_PYTHON_ECHO_SMOKE` in Jenkins and run the `Rockwell-CICD-Smoke` job. This confirms `NT AUTHORITY\SYSTEM` can reach the Echo service.
+**Phase 2 is complete. All gates passed.**
 
-```powershell
-# Run from repository root on NIA-AUTO-ECH-01
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
-    -File ".\python\scripts\setup_venv.ps1"
-
-& ".\.venv\Scripts\python.exe" `
-    ".\python\smoke\echo_connectivity.py" `
-    --output ".\python\artifacts\echo-connectivity.json"
-
-$LASTEXITCODE
-Get-Content ".\python\artifacts\echo-connectivity.json"
-```
+> **Note — stale venv:** Build #11 failed because the Jenkins workspace `.venv` had been created by a prior build using Python 3.12 (`C:\Program Files\Python312`). The `setup_venv.ps1` skip-if-exists logic preserved the stale venv. The workaround was to manually delete `C:\data\jenkins_home\workspace\Rockwell-CICD-Smoke\.venv` before re-running. Future improvement: add `pyvenv.cfg` version validation to `setup_venv.ps1` so it recreates the venv when the base Python changes.
 
 ---
 
@@ -80,10 +69,20 @@ Get-Content ".\python\artifacts\echo-connectivity.json"
 | Executable enumeration (`get_all_executables()`) | ✅ | Validated interactively |
 | Project inventory (`get_communications_path()`) | ✅ | Returns `EmulateEthernet\127.0.0.1` |
 | Offline build validation (`build()`) | ✅ | Confirmed NOT supported on v36.04, requires v37+ |
-| Jenkins `RUN_PYTHON_LOGIX_DESIGNER_SMOKE` stage | 🔶 | Implemented, default false — needs Jenkins run |
+| Jenkins `RUN_PYTHON_LOGIX_DESIGNER_SMOKE` stage | 🔶 | Build #14, 2026-08-17 — **FAILED: interactive desktop required** |
 | Git-aware routine code comparison | ✅ | `compare/logix_code_compare.py` — see Phase 3a |
 
-**Next action for Phase 3:** Enable `RUN_PYTHON_LOGIX_DESIGNER_SMOKE` in Jenkins and confirm the open/close probe passes under `NT AUTHORITY\SYSTEM`. This is important: the SDK may have interactive desktop requirements that affect whether it works as Local System.
+**Phase 3 gate result (2026-08-17, build #14):** `LogixSdkError: The operation has timed out.` on `open_logix_project` after 68 seconds. Diagnostics confirm:
+- `windows_identity: NT AUTHORITY\SYSTEM`, `session_id: 0` (no Window Station / desktop)
+- `LdSdkServer.exe` is running in session 0 and TCP connection was established on port 53204
+- The SDK server connects but cannot complete the ACD open without a desktop — this is the documented risk
+
+**Next action — choose a path to resolve the interactive desktop requirement:**
+
+- **Option A (Scheduled Task wrapper):** Jenkins triggers a Windows Scheduled Task that runs the SDK under `csmith`'s interactive session and polls for the JSON output. Keeps Jenkins as `NT AUTHORITY\SYSTEM`. Requires `csmith` to be logged in.
+- **Option B (Jenkins service account change):** Change the Jenkins Windows service `Log On As` from Local System to `csmith`. Jenkins runs in the user's session context. Simpler pipeline, no wrapper. Jenkins inherits all of csmith's permissions.
+
+Option B is the path of least resistance for a single-machine lab and is the recommended approach unless there is a specific reason to keep Jenkins as Local System.
 
 ---
 

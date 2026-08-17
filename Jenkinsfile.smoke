@@ -148,42 +148,42 @@ pipeline {
 
         stage('Python Logix Designer Read-Only Smoke') {
             options {
-                timeout(time: 12, unit: 'MINUTES')
+                timeout(time: 14, unit: 'MINUTES')
             }
             when {
                 expression { params.RUN_PYTHON_LOGIX_DESIGNER_SMOKE }
             }
             steps {
                 bat '''
-                    "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-open-project.json" --timeout-seconds 600
+                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%WORKSPACE%\\python\\scripts\\invoke_ld_sdk_interactive.ps1" -PythonExe "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" -ScriptPath "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" -AcdPath "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" -OutputPath "%WORKSPACE%\\python\\artifacts\\logix-designer-open-project.json" -TimeoutSeconds 600
                 '''
             }
         }
 
         stage('Python Logix Designer Executable Enumeration') {
             options {
-                timeout(time: 12, unit: 'MINUTES')
+                timeout(time: 14, unit: 'MINUTES')
             }
             when {
                 expression { params.RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION }
             }
             steps {
                 bat '''
-                    "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-executables.json" --timeout-seconds 600 --enumerate-executables
+                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%WORKSPACE%\\python\\scripts\\invoke_ld_sdk_interactive.ps1" -PythonExe "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" -ScriptPath "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" -AcdPath "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" -OutputPath "%WORKSPACE%\\python\\artifacts\\logix-designer-executables.json" -TimeoutSeconds 600 -ModeFlag "--enumerate-executables"
                 '''
             }
         }
 
         stage('Python Logix Designer Project Inventory') {
             options {
-                timeout(time: 12, unit: 'MINUTES')
+                timeout(time: 14, unit: 'MINUTES')
             }
             when {
                 expression { params.RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY }
             }
             steps {
                 bat '''
-                    "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" --project "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\logix-designer-project-inventory.json" --timeout-seconds 600 --project-inventory
+                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%WORKSPACE%\\python\\scripts\\invoke_ld_sdk_interactive.ps1" -PythonExe "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" -ScriptPath "%WORKSPACE%\\python\\smoke\\logix_designer_executables.py" -AcdPath "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" -OutputPath "%WORKSPACE%\\python\\artifacts\\logix-designer-project-inventory.json" -TimeoutSeconds 600 -ModeFlag "--project-inventory"
                 '''
             }
         }
