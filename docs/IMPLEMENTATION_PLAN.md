@@ -90,7 +90,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for decisions, constraints, and the targe
 | Markdown + JSON output | ✅ | Reports added/removed/modified/unchanged routines |
 | Source integrity verification | ✅ | SHA-256 before and after, working tree status checked |
 | Manual validation on NIA-AUTO-ECH-01 | ✅ | 2026-08-17. Exit 0, identical (HEAD vs HEAD^ same ACD blob). 23/23 checks passed. 104s. |
-| Jenkins integration | 🔶 | Stage added to Jenkinsfile.smoke (`RUN_PYTHON_LOGIX_DESIGNER_CODE_COMPARE`). Not yet run under Jenkins. |
+| Jenkins integration | ✅ | Build #18, 2026-08-17. Exit 0. 112s. Active session detected, task routed through csmith's interactive desktop. |
 
 **Next action:** Run `logix_code_compare.py` manually with `--base-revision HEAD^ --current-revision HEAD`. Confirm exit 0 and a valid comparison result before adding a Jenkins stage.
 
