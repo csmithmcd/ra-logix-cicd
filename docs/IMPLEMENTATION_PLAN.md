@@ -69,20 +69,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for decisions, constraints, and the targe
 | Executable enumeration (`get_all_executables()`) | ✅ | Validated interactively |
 | Project inventory (`get_communications_path()`) | ✅ | Returns `EmulateEthernet\127.0.0.1` |
 | Offline build validation (`build()`) | ✅ | Confirmed NOT supported on v36.04, requires v37+ |
-| Jenkins `RUN_PYTHON_LOGIX_DESIGNER_SMOKE` stage | 🔶 | Build #14, 2026-08-17 — **FAILED: interactive desktop required** |
+| Jenkins `RUN_PYTHON_LOGIX_DESIGNER_SMOKE` stage | ✅ | Build #16, 2026-08-17. Exit 0, open/close passed. 49s. |
 | Git-aware routine code comparison | ✅ | `compare/logix_code_compare.py` — see Phase 3a |
 
-**Phase 3 gate result (2026-08-17, build #14):** `LogixSdkError: The operation has timed out.` on `open_logix_project` after 68 seconds. Diagnostics confirm:
-- `windows_identity: NT AUTHORITY\SYSTEM`, `session_id: 0` (no Window Station / desktop)
-- `LdSdkServer.exe` is running in session 0 and TCP connection was established on port 53204
-- The SDK server connects but cannot complete the ACD open without a desktop — this is the documented risk
+**Phase 3 is complete. All gates passed.**
 
-**Next action — choose a path to resolve the interactive desktop requirement:**
-
-- **Option A (Scheduled Task wrapper):** Jenkins triggers a Windows Scheduled Task that runs the SDK under `csmith`'s interactive session and polls for the JSON output. Keeps Jenkins as `NT AUTHORITY\SYSTEM`. Requires `csmith` to be logged in.
-- **Option B (Jenkins service account change):** Change the Jenkins Windows service `Log On As` from Local System to `csmith`. Jenkins runs in the user's session context. Simpler pipeline, no wrapper. Jenkins inherits all of csmith's permissions.
-
-Option B is the path of least resistance for a single-machine lab and is the recommended approach unless there is a specific reason to keep Jenkins as Local System.
+> **Interactive desktop solution:** `NT AUTHORITY\SYSTEM` (session 0) cannot open ACD files — confirmed in build #14. Resolved with a Windows Scheduled Task (`LD-SDK-Run`) using the `INTERACTIVE` group principal. Jenkins (SYSTEM) writes a request to `C:\data\ld-runner\request.json`, triggers the task via `schtasks /run`, and polls for `result.exitcode`. The task runs in the active console session (currently `BMCD\csmith`; `logix-runner` local account configured for auto-logon on next reboot). New scripts: `python/scripts/invoke_ld_sdk_interactive.ps1` (Jenkins wrapper) and `python/scripts/ld_sdk_task_action.ps1` (task body).
+>
+> **PS 5.1 encoding note:** PowerShell 5.1 reads `.ps1` files as Windows-1252. Non-ASCII characters (em dash U+2014) in strings cause parse errors. All PowerShell scripts in this repo must use plain ASCII only.
 
 ---
 
