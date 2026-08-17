@@ -219,9 +219,11 @@ Phase 6 confirmed `l5xplode` is available and the round-trip is semantically los
 
 | Task | Status | Notes |
 |---|---|---|
-| Commit exploded source to repo (`1-production-files/Source/`) | ⬜ | `l5xplode explode` output already tested locally. 47 files under `RSLogix5000Content/`. |
-| Jenkins stage: implode `Source/` → `Build/Controller.L5X` | ⬜ | Wraps `l5xplode implode`. No interactive session needed (no SDK dependency). |
-| Jenkins stage: build `Build/Controller.L5X` → `Build/Controller.ACD` | ⬜ | Uses `l5xgit acd2l5x` / Logix Designer SDK. Needs LD-SDK-Run path. |
+| Commit exploded source to repo (`1-production-files/Source/`) | ✅ | Committed in Phase 6 commit `a0612ce`. 47 files under `RSLogix5000Content/`. |
+| `python/build/l5x_to_acd.py` | ✅ | Logix Designer SDK: `open_logix_project(l5x)` + `save_as(acd, force=True)`. Runs via LD-SDK-Run. |
+| `python/deploy/source_deploy.py` | ✅ | Orchestrates: l5xplode implode (SYSTEM) → LD-SDK-Run l5x_to_acd (interactive) → echo_deploy.py (SYSTEM). |
+| Jenkins `RUN_PYTHON_SOURCE_DEPLOY` stage | 🔶 | Added to Jenkinsfile.smoke. Not yet run under Jenkins. |
+| Manual validation | ⬜ | Run source_deploy.py manually: `python source_deploy.py --source-dir ... --l5xplode ... --ld-python-exe ...` |
 | Add source validation stage before implode | ⬜ | Schema, required files, duplicate names |
 | Update `Jenkinsfile` pipeline order | ⬜ | implode → build → deploy → test |
 | Document source folder structure and authoring workflow | ⬜ | |

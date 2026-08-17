@@ -42,6 +42,11 @@ pipeline {
             defaultValue: false,
             description: 'Create CICD_TEST_01 in Echo, download ExampleForCICD_L85E, verify HARD_RUN, delete. Runs under NT AUTHORITY/SYSTEM -- no interactive desktop required.'
         )
+        booleanParam(
+            name: 'RUN_PYTHON_SOURCE_DEPLOY',
+            defaultValue: false,
+            description: 'Implode Source/ -> L5X, convert to ACD via LD-SDK, download to Echo. Requires interactive session for L5X->ACD step.'
+        )
         string(
             name: 'LOGIX_DESIGNER_CODE_COMPARE_BASE',
             defaultValue: 'HEAD^',
@@ -61,6 +66,7 @@ pipeline {
         ECHO_SDK_WHEEL = 'C:\\Users\\Public\\Documents\\FactoryTalk Logix Echo\\SDK\\Python\\ftecho_sdk-4.0.0-py3-none-any.whl'
         LOGIX_DESIGNER_SDK_WHEEL = 'C:\\Users\\Public\\Documents\\Studio 5000\\Logix Designer SDK\\python\\logix_designer_sdk-2.0.2-py3-none-any.whl'
         LOGIX_DESIGNER_PROJECT = '1-production-files\\ACDs\\ExampleForCICD_L85E.ACD'
+        L5XPLODE_EXE = 'C:\\Projects\\ra-logix-designer-vcs-custom-tools\\artifacts\\bin\\Release\\l5xplode.exe'
     }
 
     stages {
@@ -128,7 +134,7 @@ pipeline {
                 timeout(time: 10, unit: 'MINUTES')
             }
             when {
-                expression { params.RUN_PYTHON_ECHO_SMOKE }
+                expression { params.RUN_PYTHON_ECHO_SMOKE || params.RUN_PYTHON_ECHO_DEPLOY || params.RUN_PYTHON_SOURCE_DEPLOY }
             }
             steps {
                 bat '''
@@ -157,7 +163,8 @@ pipeline {
                     params.RUN_PYTHON_LOGIX_DESIGNER_SMOKE ||
                     params.RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION ||
                     params.RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY ||
-                    params.RUN_PYTHON_LOGIX_DESIGNER_CODE_COMPARE
+                    params.RUN_PYTHON_LOGIX_DESIGNER_CODE_COMPARE ||
+                    params.RUN_PYTHON_SOURCE_DEPLOY
                 }
             }
             steps {
@@ -219,6 +226,20 @@ pipeline {
             steps {
                 bat '''
                     "%WORKSPACE%\\.venv\\Scripts\\python.exe" "%WORKSPACE%\\python\\deploy\\echo_deploy.py" --acd "%WORKSPACE%\\%LOGIX_DESIGNER_PROJECT%" --output "%WORKSPACE%\\python\\artifacts\\echo-deploy.json" --timeout-seconds 300
+                '''
+            }
+        }
+
+        stage('Python Source Deploy') {
+            options {
+                timeout(time: 30, unit: 'MINUTES')
+            }
+            when {
+                expression { params.RUN_PYTHON_SOURCE_DEPLOY }
+            }
+            steps {
+                bat '''
+                    "%WORKSPACE%\\.venv\\Scripts\\python.exe" "%WORKSPACE%\\python\\deploy\\source_deploy.py" --source-dir "%WORKSPACE%\\1-production-files\\Source" --l5xplode "%L5XPLODE_EXE%" --ld-python-exe "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" --l5x-to-acd-script "%WORKSPACE%\\python\\build\\l5x_to_acd.py" --output "%WORKSPACE%\\python\\artifacts\\source-deploy.json" --timeout-seconds 300
                 '''
             }
         }
