@@ -32,6 +32,21 @@ pipeline {
             defaultValue: false,
             description: 'Read project communications path and executable inventory from a disposable ACD copy. Keep disabled until manually validated.'
         )
+        booleanParam(
+            name: 'RUN_PYTHON_LOGIX_DESIGNER_CODE_COMPARE',
+            defaultValue: false,
+            description: 'Compare routine logic between HEAD^ and HEAD using the Logix Designer SDK. Reports added/removed/modified routines; differences do not fail the build.'
+        )
+        string(
+            name: 'LOGIX_DESIGNER_CODE_COMPARE_BASE',
+            defaultValue: 'HEAD^',
+            description: 'Older Git revision for the code comparison. Defaults to HEAD^.'
+        )
+        string(
+            name: 'LOGIX_DESIGNER_CODE_COMPARE_CURRENT',
+            defaultValue: 'HEAD',
+            description: 'Newer Git revision for the code comparison. Defaults to HEAD.'
+        )
     }
 
     environment {
@@ -136,7 +151,8 @@ pipeline {
                 expression {
                     params.RUN_PYTHON_LOGIX_DESIGNER_SMOKE ||
                     params.RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION ||
-                    params.RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY
+                    params.RUN_PYTHON_LOGIX_DESIGNER_PROJECT_INVENTORY ||
+                    params.RUN_PYTHON_LOGIX_DESIGNER_CODE_COMPARE
                 }
             }
             steps {
@@ -187,11 +203,25 @@ pipeline {
                 '''
             }
         }
+
+        stage('Python Logix Designer Code Compare') {
+            options {
+                timeout(time: 20, unit: 'MINUTES')
+            }
+            when {
+                expression { params.RUN_PYTHON_LOGIX_DESIGNER_CODE_COMPARE }
+            }
+            steps {
+                bat '''
+                    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%WORKSPACE%\\python\\scripts\\invoke_ld_sdk_compare_interactive.ps1" -PythonExe "%WORKSPACE%\\.venv-logix-designer\\Scripts\\python.exe" -ScriptPath "%WORKSPACE%\\python\\compare\\logix_code_compare.py" -Repository "%WORKSPACE%" -ProjectPath "1-production-files/ACDs/ExampleForCICD_L85E.ACD" -BaseRevision "%LOGIX_DESIGNER_CODE_COMPARE_BASE%" -CurrentRevision "%LOGIX_DESIGNER_CODE_COMPARE_CURRENT%" -OutputJson "%WORKSPACE%\\python\\artifacts\\logix-code-compare.json" -OutputMarkdown "%WORKSPACE%\\python\\artifacts\\logix-code-compare.md" -TimeoutSeconds 720
+                '''
+            }
+        }
     }
 
     post {
         always {
-            archiveArtifacts artifacts: '2-cicd-config/1-ci-teststage/2-ci-unittestscript/**/bin/Release/**/*,python/artifacts/*.json',
+            archiveArtifacts artifacts: '2-cicd-config/1-ci-teststage/2-ci-unittestscript/**/bin/Release/**/*,python/artifacts/*.json,python/artifacts/*.md',
                              allowEmptyArchive: true,
                              fingerprint: true
         }
