@@ -121,7 +121,7 @@ try {
         if (Test-Path -LiteralPath $ExitCodeFile) {
             $raw = (Get-Content -LiteralPath $ExitCodeFile -Raw).Trim()
             $exitCode = [int]$raw
-            Write-Step "Task completed — exit code: $exitCode"
+            Write-Step "Task completed - exit code: $exitCode"
             exit $exitCode
         }
         # Increase poll interval after 30s to reduce noise

@@ -8,7 +8,7 @@
 
 .NOTES
     This script is invoked by the Windows Scheduled Task "LD-SDK-Run".
-    Do NOT call it directly from Jenkins — use invoke_ld_sdk_interactive.ps1.
+    Do NOT call it directly from Jenkins - use invoke_ld_sdk_interactive.ps1.
 #>
 
 Set-StrictMode -Version Latest
