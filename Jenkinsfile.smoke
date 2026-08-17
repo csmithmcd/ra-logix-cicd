@@ -20,7 +20,7 @@ pipeline {
         string(
             name: 'LOGIX_DESIGNER_PYTHON_EXE',
             defaultValue: 'C:\\Program Files\\Python313\\python.exe',
-            description: 'Python 3.13 x64 executable used only when the Logix Designer smoke is enabled.'
+            description: 'Python 3.13 x64 executable for Logix Designer smoke stages.'
         )
         booleanParam(
             name: 'RUN_PYTHON_LOGIX_DESIGNER_EXECUTABLE_ENUMERATION',
@@ -37,7 +37,7 @@ pipeline {
     environment {
         SOLUTION_DIR = '2-cicd-config\\1-ci-teststage\\2-ci-unittestscript'
         SOLUTION_FILE = 'LogixUnitTesting.sln'
-        PYTHON_EXE = 'C:\\Program Files\\Python312\\python.exe'
+        PYTHON_EXE = 'C:\\Program Files\\Python313\\python.exe'
         ECHO_SDK_WHEEL = 'C:\\Users\\Public\\Documents\\FactoryTalk Logix Echo\\SDK\\Python\\ftecho_sdk-4.0.0-py3-none-any.whl'
         LOGIX_DESIGNER_SDK_WHEEL = 'C:\\Users\\Public\\Documents\\Studio 5000\\Logix Designer SDK\\python\\logix_designer_sdk-2.0.2-py3-none-any.whl'
         LOGIX_DESIGNER_PROJECT = '1-production-files\\ACDs\\ExampleForCICD_L85E.ACD'

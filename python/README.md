@@ -20,10 +20,10 @@ It does not create, update, start, stop, download to, or delete controllers. The
 - Package: `ftecho_sdk` 4.0.0
 - Import: `from ftecho_sdk import ServiceApiClientV2`
 - Supported Python: 3.12 or 3.13
-- Recommended Python: 3.12 x64
+- Baseline Python: 3.13 x64 (`C:\Program Files\Python313\python.exe`)
 - SDK wheel SHA256: `460F75777CE30CEF72CD606E83BC320DE212B2C1CBB8EB776AA8535CA3B53BA9`
 
-Python was not installed when the SDK inventory was collected. Install Python 3.12 x64 for all users at `C:\Program Files\Python312`. An all-users installation is required so Jenkins running as `NT AUTHORITY\SYSTEM` can use it.
+Python 3.13 x64 is installed for all users at `C:\Program Files\Python313`. An all-users installation is required so Jenkins running as `NT AUTHORITY\SYSTEM` can use it. Python 3.12 is no longer present on NIA-AUTO-ECH-01.
 
 ## Manual test before Jenkins
 
