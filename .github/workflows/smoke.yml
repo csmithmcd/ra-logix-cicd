@@ -1,0 +1,222 @@
+name: Rockwell CI Smoke
+
+# Triggers:
+#   push  → always runs the dotnet build verification (Environment through Verify Output)
+#   workflow_dispatch → same build verification, plus any SDK stages you enable
+#
+# SDK stages (Echo, Logix Designer, Source Deploy) are gated behind boolean inputs
+# so a plain push only confirms the C# project compiles.
+
+on:
+  push:
+    branches: [main, lab]
+  workflow_dispatch:
+    inputs:
+      run_python_echo_smoke:
+        description: 'Run Echo read-only connectivity smoke test'
+        type: boolean
+        default: false
+      run_python_logix_designer_smoke:
+        description: 'Run Logix Designer open/close probe'
+        type: boolean
+        default: false
+      run_python_logix_designer_executable_enumeration:
+        description: 'Read executable metadata from disposable ACD copy'
+        type: boolean
+        default: false
+      run_python_logix_designer_project_inventory:
+        description: 'Read project communications path and inventory'
+        type: boolean
+        default: false
+      run_python_logix_designer_code_compare:
+        description: 'Compare routines between two Git revisions'
+        type: boolean
+        default: false
+      run_python_echo_deploy:
+        description: 'Deploy ACD to Echo, verify HARD_RUN, delete'
+        type: boolean
+        default: false
+      run_python_source_deploy:
+        description: 'Implode Source/ → L5X → ACD → Echo deploy'
+        type: boolean
+        default: false
+      logix_designer_python_exe:
+        description: 'Python 3.13 x64 executable for Logix Designer stages'
+        type: string
+        default: 'C:\Program Files\Python313\python.exe'
+      code_compare_base:
+        description: 'Older Git revision for code comparison'
+        type: string
+        default: 'HEAD^'
+      code_compare_current:
+        description: 'Newer Git revision for code comparison'
+        type: string
+        default: 'HEAD'
+
+# Prevent overlapping runs on the same ref.
+# cancel-in-progress: false so a running deploy is never killed mid-flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SOLUTION_DIR: 2-cicd-config\1-ci-teststage\2-ci-unittestscript
+  SOLUTION_FILE: LogixUnitTesting.sln
+  PYTHON_EXE: C:\Program Files\Python313\python.exe
+  ECHO_SDK_WHEEL: C:\Users\Public\Documents\FactoryTalk Logix Echo\SDK\Python\ftecho_sdk-4.0.0-py3-none-any.whl
+  LOGIX_DESIGNER_SDK_WHEEL: C:\Users\Public\Documents\Studio 5000\Logix Designer SDK\python\logix_designer_sdk-2.0.2-py3-none-any.whl
+  LOGIX_DESIGNER_PROJECT: 1-production-files\ACDs\ExampleForCICD_L85E.ACD
+  L5XPLODE_EXE: C:\Projects\ra-logix-designer-vcs-custom-tools\artifacts\bin\Release\l5xplode.exe
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, NIA-AUTO-ECH-01]
+    timeout-minutes: 90
+
+    steps:
+
+      # -----------------------------------------------------------------------
+      # Checkout
+      # fetch-depth: 0 gives full history so HEAD^ works in code compare.
+      # -----------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # -----------------------------------------------------------------------
+      # Always-run: environment probe, dotnet build chain
+      # -----------------------------------------------------------------------
+      - name: Environment
+        shell: cmd
+        run: |
+          echo Workspace: %GITHUB_WORKSPACE%
+          whoami
+          where git
+          git --version
+          where dotnet
+          dotnet --info
+          dotnet --list-sdks
+
+      - name: Repository Status
+        shell: cmd
+        run: |
+          git status
+          git branch --show-current
+          git log -1 --oneline
+
+      - name: NuGet Sources
+        shell: cmd
+        run: |
+          type "%GITHUB_WORKSPACE%\NuGet.Config"
+          dotnet nuget list source --configfile "%GITHUB_WORKSPACE%\NuGet.Config"
+          if not exist "C:\data\nuget\rockwell" exit /b 1
+          dir "C:\data\nuget\rockwell\*.nupkg"
+
+      - name: Restore
+        shell: cmd
+        working-directory: ${{ env.SOLUTION_DIR }}
+        run: dotnet restore "%SOLUTION_FILE%" --force --configfile "%GITHUB_WORKSPACE%\NuGet.Config"
+
+      - name: Build
+        shell: cmd
+        working-directory: ${{ env.SOLUTION_DIR }}
+        run: dotnet build "%SOLUTION_FILE%" -c Release --no-restore
+
+      - name: Verify Output
+        shell: cmd
+        run: |
+          if not exist "%SOLUTION_DIR%\UnitTesting_ConsoleApp\bin\Release\net10.0-windows7.0\UnitTesting_ConsoleApp.dll" exit /b 1
+
+      # -----------------------------------------------------------------------
+      # Echo SDK stages (workspace venv at .venv)
+      # -----------------------------------------------------------------------
+      - name: Python Echo Setup
+        if: ${{ inputs.run_python_echo_smoke || inputs.run_python_echo_deploy }}
+        timeout-minutes: 10
+        shell: cmd
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%GITHUB_WORKSPACE%\python\scripts\setup_venv.ps1" -PythonExecutable "%PYTHON_EXE%" -EchoSdkWheel "%ECHO_SDK_WHEEL%" -VenvPath "%GITHUB_WORKSPACE%\.venv"
+
+      - name: Python Echo Read-Only Smoke
+        if: ${{ inputs.run_python_echo_smoke }}
+        shell: cmd
+        run: |
+          "%GITHUB_WORKSPACE%\.venv\Scripts\python.exe" "%GITHUB_WORKSPACE%\python\smoke\echo_connectivity.py" --output "%GITHUB_WORKSPACE%\python\artifacts\echo-connectivity.json" --timeout-seconds 30
+
+      # -----------------------------------------------------------------------
+      # Logix Designer SDK stages (workspace venv at .venv-logix-designer)
+      # -----------------------------------------------------------------------
+      - name: Python Logix Designer Setup
+        if: ${{ inputs.run_python_logix_designer_smoke || inputs.run_python_logix_designer_executable_enumeration || inputs.run_python_logix_designer_project_inventory || inputs.run_python_logix_designer_code_compare }}
+        timeout-minutes: 10
+        shell: cmd
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%GITHUB_WORKSPACE%\python\scripts\setup_logix_designer_venv.ps1" -PythonExecutable "${{ inputs.logix_designer_python_exe || env.PYTHON_EXE }}" -LogixDesignerSdkWheel "%LOGIX_DESIGNER_SDK_WHEEL%" -VenvPath "%GITHUB_WORKSPACE%\.venv-logix-designer"
+
+      - name: Python Logix Designer Read-Only Smoke
+        if: ${{ inputs.run_python_logix_designer_smoke }}
+        timeout-minutes: 14
+        shell: cmd
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%GITHUB_WORKSPACE%\python\scripts\invoke_ld_sdk_interactive.ps1" -PythonExe "%GITHUB_WORKSPACE%\.venv-logix-designer\Scripts\python.exe" -ScriptPath "%GITHUB_WORKSPACE%\python\smoke\logix_designer_executables.py" -AcdPath "%GITHUB_WORKSPACE%\%LOGIX_DESIGNER_PROJECT%" -OutputPath "%GITHUB_WORKSPACE%\python\artifacts\logix-designer-open-project.json" -TimeoutSeconds 600
+
+      - name: Python Logix Designer Executable Enumeration
+        if: ${{ inputs.run_python_logix_designer_executable_enumeration }}
+        timeout-minutes: 14
+        shell: cmd
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%GITHUB_WORKSPACE%\python\scripts\invoke_ld_sdk_interactive.ps1" -PythonExe "%GITHUB_WORKSPACE%\.venv-logix-designer\Scripts\python.exe" -ScriptPath "%GITHUB_WORKSPACE%\python\smoke\logix_designer_executables.py" -AcdPath "%GITHUB_WORKSPACE%\%LOGIX_DESIGNER_PROJECT%" -OutputPath "%GITHUB_WORKSPACE%\python\artifacts\logix-designer-executables.json" -TimeoutSeconds 600 -ModeFlag "--enumerate-executables"
+
+      - name: Python Logix Designer Project Inventory
+        if: ${{ inputs.run_python_logix_designer_project_inventory }}
+        timeout-minutes: 14
+        shell: cmd
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%GITHUB_WORKSPACE%\python\scripts\invoke_ld_sdk_interactive.ps1" -PythonExe "%GITHUB_WORKSPACE%\.venv-logix-designer\Scripts\python.exe" -ScriptPath "%GITHUB_WORKSPACE%\python\smoke\logix_designer_executables.py" -AcdPath "%GITHUB_WORKSPACE%\%LOGIX_DESIGNER_PROJECT%" -OutputPath "%GITHUB_WORKSPACE%\python\artifacts\logix-designer-project-inventory.json" -TimeoutSeconds 600 -ModeFlag "--project-inventory"
+
+      # -----------------------------------------------------------------------
+      # Echo deploy (ACD from repo → Echo, workspace venv)
+      # -----------------------------------------------------------------------
+      - name: Python Echo Deploy
+        if: ${{ inputs.run_python_echo_deploy }}
+        timeout-minutes: 10
+        shell: cmd
+        run: |
+          "%GITHUB_WORKSPACE%\.venv\Scripts\python.exe" "%GITHUB_WORKSPACE%\python\deploy\echo_deploy.py" --acd "%GITHUB_WORKSPACE%\%LOGIX_DESIGNER_PROJECT%" --output "%GITHUB_WORKSPACE%\python\artifacts\echo-deploy.json" --timeout-seconds 300
+
+      # -----------------------------------------------------------------------
+      # Source deploy (Source/ → L5X → ACD → Echo)
+      # Uses invoke_source_deploy.ps1 which manages its own machine-level venvs
+      # at C:\data\rockwell-ci\ -- no setup step needed here.
+      # -----------------------------------------------------------------------
+      - name: Python Source Deploy
+        if: ${{ inputs.run_python_source_deploy }}
+        timeout-minutes: 30
+        shell: cmd
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%GITHUB_WORKSPACE%\python\scripts\invoke_source_deploy.ps1" -SourceDir "%GITHUB_WORKSPACE%\1-production-files\Source" -Output "%GITHUB_WORKSPACE%\python\artifacts\source-deploy.json" -TimeoutSeconds 300
+
+      # -----------------------------------------------------------------------
+      # Code compare (requires full git history -- fetch-depth: 0 above)
+      # -----------------------------------------------------------------------
+      - name: Python Logix Designer Code Compare
+        if: ${{ inputs.run_python_logix_designer_code_compare }}
+        timeout-minutes: 20
+        shell: cmd
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%GITHUB_WORKSPACE%\python\scripts\invoke_ld_sdk_compare_interactive.ps1" -PythonExe "%GITHUB_WORKSPACE%\.venv-logix-designer\Scripts\python.exe" -ScriptPath "%GITHUB_WORKSPACE%\python\compare\logix_code_compare.py" -Repository "%GITHUB_WORKSPACE%" -ProjectPath "1-production-files/ACDs/ExampleForCICD_L85E.ACD" -BaseRevision "${{ inputs.code_compare_base || 'HEAD^' }}" -CurrentRevision "${{ inputs.code_compare_current || 'HEAD' }}" -OutputJson "%GITHUB_WORKSPACE%\python\artifacts\logix-code-compare.json" -OutputMarkdown "%GITHUB_WORKSPACE%\python\artifacts\logix-code-compare.md" -TimeoutSeconds 720
+
+      # -----------------------------------------------------------------------
+      # Upload artifacts (always, so failures also preserve evidence)
+      # -----------------------------------------------------------------------
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rockwell-ci-${{ github.run_number }}
+          path: |
+            2-cicd-config/1-ci-teststage/2-ci-unittestscript/**/bin/Release/**/*
+            python/artifacts/*.json
+            python/artifacts/*.md
+          if-no-files-found: ignore
