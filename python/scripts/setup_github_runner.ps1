@@ -76,10 +76,8 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# ---- Install and start Windows service ----
-Write-Step "Installing runner as Windows service (LocalSystem)..."
-.\svc.cmd install
-.\svc.cmd start
+# --runasservice on config.cmd already installed and started the Windows service.
+# svc.cmd is only needed when configuring without --runasservice; remove it here.
 
 Write-Step ""
 Write-Step "Runner installed and started."
