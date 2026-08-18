@@ -53,7 +53,11 @@ DEFAULT_ACD = (
 DEFAULT_OUTPUT = PYTHON_ROOT / "artifacts" / "echo-deploy.json"
 DOWNLOAD_POLL_INTERVAL = 3.0   # seconds between feedback checks
 DOWNLOAD_MAX_WAIT = 300.0      # seconds before giving up on download
+PROJECT_LOAD_TIMEOUT = 120.0   # seconds to wait for loaded_project_name to become non-empty
+PROJECT_LOAD_POLL = 3.0        # seconds between loaded_project_name polls
 MODE_SETTLE_WAIT = 5.0         # seconds to wait after setting RUN before reading back
+DELETE_MAX_RETRIES = 4         # attempts before giving up on controller/chassis delete
+DELETE_RETRY_DELAY = 8.0       # seconds between delete retries
 
 
 def parse_args() -> argparse.Namespace:
@@ -194,64 +198,87 @@ async def find_cicd_test_controller(client: Any) -> Any | None:
 
 async def safe_delete_chassis(client: Any, chassis_guid: str) -> bool:
     """
-    Delete a chassis. Returns True on success, False on failure (logs but does not raise).
+    Delete a chassis, retrying up to DELETE_MAX_RETRIES times.
+    Retries handle the window after download where the controller/chassis is in a
+    transitional state and the Echo service rejects API calls.
+    Returns True on success, False on failure (logs but does not raise).
     Any controllers inside should already be deleted before calling this.
     """
-    try:
-        await client.delete_chassis(chassis_guid)
-        LOGGER.info(
-            "Chassis deleted",
-            extra={"event": "chassis_delete_ok", "chassis_guid": chassis_guid},
-        )
-        return True
-    except Exception as err:
-        LOGGER.error(
-            "Failed to delete chassis -- manual cleanup required",
-            extra={"event": "chassis_delete_failed", "error": str(err),
-                   "chassis_guid": chassis_guid},
-        )
-        return False
+    for attempt in range(1, DELETE_MAX_RETRIES + 1):
+        try:
+            await client.delete_chassis(chassis_guid)
+            LOGGER.info(
+                "Chassis deleted",
+                extra={"event": "chassis_delete_ok",
+                       "chassis_guid": chassis_guid, "attempt": attempt},
+            )
+            return True
+        except Exception as err:
+            if attempt < DELETE_MAX_RETRIES:
+                LOGGER.warning(
+                    "Delete chassis attempt %d/%d failed; retrying in %.0fs: %s",
+                    attempt, DELETE_MAX_RETRIES, DELETE_RETRY_DELAY, err,
+                    extra={"event": "chassis_delete_retry", "attempt": attempt},
+                )
+                await asyncio.sleep(DELETE_RETRY_DELAY)
+            else:
+                LOGGER.error(
+                    "Failed to delete chassis after %d attempts -- manual cleanup required: %s",
+                    DELETE_MAX_RETRIES, err,
+                    extra={"event": "chassis_delete_failed", "chassis_guid": chassis_guid},
+                )
+    return False
 
 
 async def safe_delete_controller(client: Any, controller_guid: str) -> bool:
     """
-    Disable the controller then delete it.
-    Returns True if deleted, False if deletion failed (logs an error but does not raise).
+    Disable the controller then delete it, retrying up to DELETE_MAX_RETRIES times.
+    Retries handle the window after download where the controller is in a transitional
+    state and rejects API calls.
+    Returns True if deleted, False if all attempts failed (logs an error but does not raise).
     """
-    from ftecho_sdk.interfaces.service.controller import ControllerUpdate
-
+    # Best-effort disable before deletion (ignore failure -- delete may still succeed).
     try:
-        # Disable first so the controller stops executing before deletion.
-        # update_controller requires Name; read the current state first.
-        try:
-            current = await client.read_controller(controller_guid)
-            disable_update = current.to_controller_update()
-            disable_update.is_enabled = False
-            await client.update_controller(disable_update)
-            LOGGER.info(
-                "Controller disabled before deletion",
-                extra={"event": "controller_disable_ok"},
-            )
-        except Exception as disable_err:
-            LOGGER.warning(
-                "Could not disable controller before deletion; proceeding anyway",
-                extra={"event": "controller_disable_failed", "error": str(disable_err)},
-            )
-
-        await client.delete_controller(controller_guid)
+        current = await client.read_controller(controller_guid)
+        disable_update = current.to_controller_update()
+        disable_update.is_enabled = False
+        await client.update_controller(disable_update)
         LOGGER.info(
-            "Controller deleted",
-            extra={"event": "controller_delete_ok", "controller_guid": controller_guid},
+            "Controller disabled before deletion",
+            extra={"event": "controller_disable_ok"},
         )
-        return True
+    except Exception as disable_err:
+        LOGGER.warning(
+            "Could not disable controller before deletion; proceeding anyway: %s",
+            disable_err,
+            extra={"event": "controller_disable_failed"},
+        )
 
-    except Exception as err:
-        LOGGER.error(
-            "Failed to delete controller -- manual cleanup required",
-            extra={"event": "controller_delete_failed", "error": str(err),
-                   "controller_guid": controller_guid},
-        )
-        return False
+    for attempt in range(1, DELETE_MAX_RETRIES + 1):
+        try:
+            await client.delete_controller(controller_guid)
+            LOGGER.info(
+                "Controller deleted",
+                extra={"event": "controller_delete_ok",
+                       "controller_guid": controller_guid, "attempt": attempt},
+            )
+            return True
+        except Exception as err:
+            if attempt < DELETE_MAX_RETRIES:
+                LOGGER.warning(
+                    "Delete controller attempt %d/%d failed; retrying in %.0fs: %s",
+                    attempt, DELETE_MAX_RETRIES, DELETE_RETRY_DELAY, err,
+                    extra={"event": "controller_delete_retry", "attempt": attempt},
+                )
+                await asyncio.sleep(DELETE_RETRY_DELAY)
+            else:
+                LOGGER.error(
+                    "Failed to delete controller after %d attempts -- manual cleanup required: %s",
+                    DELETE_MAX_RETRIES, err,
+                    extra={"event": "controller_delete_failed",
+                           "controller_guid": controller_guid},
+                )
+    return False
 
 
 async def poll_download(
@@ -303,6 +330,59 @@ async def poll_download(
     checks["download_completed"] = "failed"
     raise RuntimeError(
         f"Download did not complete within {timeout:.0f} seconds"
+    )
+
+
+async def poll_project_loaded(
+    client: Any,
+    controller_guid: str,
+    checks: dict[str, str],
+) -> None:
+    """
+    Poll read_controller until loaded_project_name is non-empty.
+
+    The Echo download feedback API reports DONE before the controller finishes
+    loading the project internally.  Attempting to read or update the controller
+    in this transitional window raises an SDK error.  This function bridges that
+    gap by waiting until the controller reports a non-empty project name before
+    the caller attempts any further API calls.
+
+    Raises RuntimeError if the project is not loaded within PROJECT_LOAD_TIMEOUT.
+    """
+    LOGGER.info(
+        "Waiting for controller to finish loading project after download...",
+        extra={"event": "project_load_poll_start"},
+    )
+    deadline = time.monotonic() + PROJECT_LOAD_TIMEOUT
+    attempt = 0
+    while time.monotonic() < deadline:
+        await asyncio.sleep(PROJECT_LOAD_POLL)
+        attempt += 1
+        try:
+            state = await client.read_controller(controller_guid)
+            if state.loaded_project_name:
+                LOGGER.info(
+                    "Project loaded in controller",
+                    extra={"event": "project_load_done",
+                           "project": state.loaded_project_name, "attempt": attempt},
+                )
+                checks["project_loaded"] = "passed"
+                return
+            LOGGER.info(
+                "Project not yet loaded; polling... (attempt %d)",
+                attempt,
+                extra={"event": "project_load_poll", "attempt": attempt},
+            )
+        except Exception as err:
+            LOGGER.warning(
+                "read_controller failed during project load poll (attempt %d); retrying: %s",
+                attempt, err,
+                extra={"event": "project_load_poll_error", "attempt": attempt},
+            )
+
+    checks["project_loaded"] = "failed"
+    raise RuntimeError(
+        f"Controller project did not finish loading within {PROJECT_LOAD_TIMEOUT:.0f} seconds"
     )
 
 
@@ -481,6 +561,13 @@ async def run_lifecycle(
         checks["download_started"] = "passed"
 
         await poll_download(client, controller_guid, DOWNLOAD_MAX_WAIT, checks)
+
+        # ------------------------------------------------------------------ #
+        # Wait for the project to finish loading inside the controller.       #
+        # Echo's download feedback reports DONE before the controller finishes#
+        # its internal load; any API call in that window fails immediately.   #
+        # ------------------------------------------------------------------ #
+        await poll_project_loaded(client, controller_guid, checks)
 
         # ------------------------------------------------------------------ #
         # Set RUN mode (key switch to RUN position)                           #
