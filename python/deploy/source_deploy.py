@@ -56,7 +56,7 @@ RESULT_FILE = RUNNER_DIR / "result.exitcode"
 # Default paths derived from script location
 _HERE = Path(__file__).resolve().parent
 DEFAULT_L5X_TO_ACD_SCRIPT = _HERE.parent / "build" / "l5x_to_acd.py"
-ECHO_DEPLOY_SCRIPT = _HERE / "echo_deploy.py"
+DEFAULT_ECHO_DEPLOY_SCRIPT = _HERE / "echo_deploy.py"
 
 DEFAULT_SOURCE_DIR = PYTHON_ROOT.parent / "1-production-files" / "Source"
 DEFAULT_BUILD_DIR = PYTHON_ROOT / "artifacts" / "build"
@@ -101,6 +101,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Path to l5x_to_acd.py. "
             "Default: python/build/l5x_to_acd.py relative to this script."
+        ),
+    )
+    parser.add_argument(
+        "--echo-deploy-script",
+        type=Path,
+        default=DEFAULT_ECHO_DEPLOY_SCRIPT,
+        help=(
+            "Path to echo_deploy.py. "
+            "Default: echo_deploy.py in the same directory as source_deploy.py."
         ),
     )
     parser.add_argument(
@@ -284,12 +293,9 @@ def main() -> int:
         l5xplode = args.l5xplode.resolve(strict=True)
         ld_python_exe = args.ld_python_exe.resolve(strict=True)
         l5x_to_acd_script = args.l5x_to_acd_script.resolve(strict=True)
+        echo_deploy_script = args.echo_deploy_script.resolve(strict=True)
         build_dir = args.build_dir.resolve()
         build_dir.mkdir(parents=True, exist_ok=True)
-        if not ECHO_DEPLOY_SCRIPT.exists():
-            raise FileNotFoundError(
-                f"echo_deploy.py not found at expected path: {ECHO_DEPLOY_SCRIPT}"
-            )
         result["source_dir"] = str(source_dir)
         result["build_dir"] = str(build_dir)
         result["l5xplode"] = str(l5xplode)
@@ -418,7 +424,7 @@ def main() -> int:
         proc = subprocess.run(
             [
                 sys.executable,
-                str(ECHO_DEPLOY_SCRIPT),
+                str(echo_deploy_script),
                 "--acd", str(acd_out),
                 "--output", str(echo_deploy_json),
                 "--timeout-seconds", str(timeout),
